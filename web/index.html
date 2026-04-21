@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>정보부 업무 웹앱</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-block">
+        <h2 class="brand-title">정보부 업무 웹앱</h2>
+        <p class="brand-subtitle">학교 내부망 운영 도구</p>
+      </div>
+
+      <div class="nav-group">
+        <p class="nav-title">업무 메뉴</p>
+        <button class="nav-item active" type="button" data-view="ip-scan">
+          <span class="nav-icon">IP</span>
+          <span>IP 스캔</span>
+        </button>
+        <button class="nav-item" type="button" data-view="site-accounts">
+          <span class="nav-icon">PW</span>
+          <span>사이트 계정 관리</span>
+        </button>
+        <button class="nav-item" type="button" data-view="device-inventory">
+          <span class="nav-icon">DV</span>
+          <span>기기관리대장</span>
+        </button>
+        <button class="nav-item" type="button" data-view="settings">
+          <span class="nav-icon">ST</span>
+          <span>설정</span>
+        </button>
+      </div>
+
+      <div class="sidebar-footer" id="sidebarFooterText">
+        <strong>현재 초점</strong><br />
+        시작 IP와 끝 IP를 입력해서 범위를 스캔합니다.
+      </div>
+    </aside>
+
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="product-chip">
+          <span class="product-dot"></span>
+          <span id="activeModuleLabel">실시간 범위 스캔</span>
+        </div>
+        <div class="quick-search static-search">
+          <span id="topbarContextLabel">학교 기본 범위</span>
+          <strong id="topbarContextValue">10.73.78.2 ~ 10.73.78.254</strong>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-meta" id="localHostMeta">서버 호스트 확인 중...</span>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="main-inner">
+        <section class="view-panel active" data-view-panel="ip-scan">
+          <section class="page-intro">
+            <span class="eyebrow">교내 네트워크 장애 대응</span>
+            <div class="page-title-row">
+              <div>
+                <h1>IP 스캔</h1>
+                <p class="page-subtitle">학교 기본 범위를 바로 스캔할 수 있고, 필요하면 시작 IP와 끝 IP를 바꿔 사용자 지정 범위도 검색할 수 있습니다.</p>
+              </div>
+              <span class="sync-pill" id="jobStatusPill">대기 중</span>
+            </div>
+          </section>
+
+          <section class="alert-bar">
+            <div class="alert-copy">
+              <span class="alert-label">Range Scan</span>
+              <span class="alert-title">학교 기본 범위는 10.73.78.2 부터 10.73.78.254 까지입니다.</span>
+              <span class="alert-meta">현재 버전은 범위 스캔 중심이며, 결과는 항상 IP 오름차순으로 정렬됩니다.</span>
+            </div>
+            <button class="secondary-button" type="button" id="cancelScanButton" disabled>스캔 중지</button>
+          </section>
+
+          <section class="search-panel">
+            <form class="scan-form" id="scanForm">
+              <label class="search-input">
+                <strong>시작 IP</strong>
+                <input type="text" id="startIpInput" value="10.73.78.2" aria-label="시작 IP" />
+              </label>
+              <label class="search-input">
+                <strong>끝 IP</strong>
+                <input type="text" id="endIpInput" value="10.73.78.254" aria-label="끝 IP" />
+              </label>
+              <button class="primary-button" type="submit" id="scanStartButton">스캔 시작</button>
+              <button class="secondary-button" type="button" id="defaultRangeButton">학교 기본 범위</button>
+              <button class="secondary-button" type="button" id="clearButton">초기화</button>
+            </form>
+
+            <div class="progress-block">
+              <div class="progress-meta">
+                <span id="progressText">아직 스캔을 시작하지 않았습니다.</span>
+                <span id="progressCount">0 / 0</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+              </div>
+              <div class="lan-url-box" id="lanUrlBox">내부망 접속 주소 확인 중...</div>
+            </div>
+
+            <div class="filter-row">
+              <button class="filter-chip active" type="button" data-filter="all">전체 보기</button>
+              <button class="filter-chip" type="button" data-filter="reachable">응답 장치만</button>
+              <button class="filter-chip" type="button" data-filter="offline">미응답만</button>
+              <button class="filter-chip" type="button" data-filter="unresolved">이름 미해결</button>
+              <button class="filter-chip" type="button" data-filter="has-mac">MAC 있음</button>
+            </div>
+
+            <div class="result-search-row">
+              <label class="inline-filter">
+                <span>결과 검색</span>
+                <input type="text" id="resultSearchInput" placeholder="IP, 장치명, 이름 출처, 메모 검색" aria-label="결과 검색" />
+              </label>
+              <div class="inline-filter inline-note" id="resultMetaText">정렬: IP 오름차순</div>
+            </div>
+          </section>
+
+          <section class="stats-grid" aria-label="scan summary">
+            <article class="stat-card">
+              <span class="stat-label">스캔 대상</span>
+              <strong class="stat-value" id="totalTargetsValue">0</strong>
+              <span class="stat-meta">입력한 범위 전체</span>
+            </article>
+            <article class="stat-card success">
+              <span class="stat-label">응답 장치</span>
+              <strong class="stat-value" id="aliveValue">0</strong>
+              <span class="stat-meta">ping 응답 기준</span>
+            </article>
+            <article class="stat-card warning">
+              <span class="stat-label">이름 미해결</span>
+              <strong class="stat-value" id="unresolvedValue">0</strong>
+              <span class="stat-meta">장치명 추가 확인 필요</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">MAC 확인</span>
+              <strong class="stat-value" id="macValue">0</strong>
+              <span class="stat-meta">ARP 기반 확인</span>
+            </article>
+          </section>
+
+          <section class="workspace split-workspace">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title-wrap">
+                  <h2 class="panel-title">스캔 결과</h2>
+                  <span class="panel-subtitle">응답 상태와 이름 해석 결과를 범위 단위로 확인합니다. 항상 IP 오름차순으로 표시됩니다.</span>
+                </div>
+                <button class="secondary-button" type="button" id="copyJsonButton">결과 JSON 복사</button>
+              </div>
+              <div class="panel-body">
+                <table class="scan-table">
+                  <thead>
+                    <tr>
+                      <th>IP</th>
+                      <th>상태</th>
+                      <th>장치명</th>
+                      <th>이름 출처</th>
+                      <th>MAC</th>
+                      <th>응답 시간</th>
+                      <th>메모</th>
+                    </tr>
+                  </thead>
+                  <tbody id="resultsTableBody">
+                    <tr>
+                      <td colspan="7" class="empty-cell">스캔을 시작하면 결과가 여기에 표시됩니다.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <aside class="panel detail-panel" id="detailPanel">
+              <div class="detail-top">
+                <div class="detail-name">
+                  <div>
+                    <p class="eyebrow detail-eyebrow">선택된 장치</p>
+                    <h2 id="detailDeviceName">아직 선택된 결과가 없습니다</h2>
+                  </div>
+                  <span class="status neutral" id="detailStatus">대기</span>
+                </div>
+                <p class="panel-subtitle" id="detailSummary">왼쪽 표에서 결과를 선택하면 상세 정보가 표시됩니다.</p>
+              </div>
+
+              <div class="detail-meta">
+                <div class="detail-grid">
+                  <div class="detail-item">
+                    <span class="detail-item-label">IP</span>
+                    <span class="detail-item-value mono" id="detailIp">-</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item-label">장치명</span>
+                    <span class="detail-item-value" id="detailHostname">-</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item-label">이름 출처</span>
+                    <span class="detail-item-value" id="detailHostnameSource">-</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item-label">MAC</span>
+                    <span class="detail-item-value mono" id="detailMac">-</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item-label">응답 시간</span>
+                    <span class="detail-item-value" id="detailLatency">-</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item-label">마지막 보고</span>
+                    <span class="detail-item-value" id="detailReportedAt">-</span>
+                  </div>
+                </div>
+
+                <div class="note-box" id="detailNote">
+                  범위 스캔 결과는 ping, reverse DNS, NetBIOS, ARP 정보에 따라 다르게 보일 수 있습니다.
+                </div>
+
+                <div class="detail-actions">
+                  <button class="primary-button" type="button" id="copySelectedButton" disabled>선택 결과 복사</button>
+                  <button class="secondary-button" type="button" id="openInventoryButton" disabled>기기대장 연결 예정</button>
+                </div>
+              </div>
+            </aside>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="site-accounts">
+          <section class="page-intro">
+            <span class="eyebrow">내부 사이트 계정 정리</span>
+            <div class="page-title-row">
+              <div>
+                <h1>사이트 계정 관리</h1>
+                <p class="page-subtitle">사이트, 설명, URL, ID, 비밀번호, 비고를 한 곳에서 관리합니다. URL은 아이콘으로 바로 열 수 있고, 계정 정보는 부서 내부에서 편하게 수정할 수 있습니다.</p>
+              </div>
+              <span class="sync-pill" id="accountStatusPill">목록 준비 중</span>
+            </div>
+          </section>
+
+          <section class="alert-bar">
+            <div class="alert-copy">
+              <span class="alert-label">Site Accounts</span>
+              <span class="alert-title">자주 쓰는 내부 사이트 계정을 한 화면에서 바로 수정합니다.</span>
+              <span class="alert-meta">URL은 아이콘 버튼으로 열 수 있고, 표와 상세 패널 모두 최신 저장값을 그대로 보여줍니다.</span>
+            </div>
+            <button class="secondary-button" type="button" id="refreshAccountsButton">목록 새로고침</button>
+          </section>
+
+          <section class="search-panel">
+            <div class="account-toolbar">
+              <label class="search-input account-search-input">
+                <strong>검색</strong>
+                <input type="text" id="siteAccountSearchInput" placeholder="사이트, 설명, URL, ID, 비고 검색" aria-label="사이트 계정 검색" />
+              </label>
+              <button class="primary-button" type="button" id="newAccountButton">새 항목 추가</button>
+            </div>
+
+            <div class="filter-row">
+              <button class="filter-chip active" type="button" data-account-filter="all">전체 보기</button>
+              <button class="filter-chip" type="button" data-account-filter="with-url">URL 있음</button>
+              <button class="filter-chip" type="button" data-account-filter="with-note">비고 있음</button>
+              <button class="filter-chip" type="button" data-account-filter="missing-description">설명 미입력</button>
+              <button class="filter-chip" type="button" data-account-filter="missing-password">비밀번호 없음</button>
+            </div>
+
+            <div class="account-feedback" id="accountFeedbackText">사이트 계정 목록을 불러오는 중입니다.</div>
+          </section>
+
+          <section class="stats-grid" aria-label="site account summary">
+            <article class="stat-card">
+              <span class="stat-label">등록 계정</span>
+              <strong class="stat-value" id="accountTotalValue">0</strong>
+              <span class="stat-meta">저장된 전체 항목</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">URL 연결</span>
+              <strong class="stat-value" id="accountUrlValue">0</strong>
+              <span class="stat-meta">아이콘으로 즉시 이동 가능</span>
+            </article>
+            <article class="stat-card warning">
+              <span class="stat-label">설명 미입력</span>
+              <strong class="stat-value" id="accountMissingDescriptionValue">0</strong>
+              <span class="stat-meta">정리가 필요한 항목</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">비밀번호 없음</span>
+              <strong class="stat-value" id="accountMissingPasswordValue">0</strong>
+              <span class="stat-meta">다음 작업 필요</span>
+            </article>
+          </section>
+
+          <section class="workspace split-workspace">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title-wrap">
+                  <h2 class="panel-title">사이트 계정 목록</h2>
+                  <span class="panel-subtitle" id="siteAccountResultMeta">정렬: 사이트명 오름차순</span>
+                </div>
+              </div>
+              <div class="panel-body">
+                <table class="site-account-table">
+                  <thead>
+                    <tr>
+                      <th>사이트</th>
+                      <th>설명</th>
+                      <th>URL</th>
+                      <th>ID</th>
+                      <th>PW</th>
+                      <th>비고</th>
+                    </tr>
+                  </thead>
+                  <tbody id="siteAccountsTableBody">
+                    <tr>
+                      <td colspan="6" class="empty-cell">저장된 사이트 계정이 아직 없습니다.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <aside class="panel detail-panel secure-panel">
+              <div id="accountDetailView">
+                <div class="detail-top">
+                  <div class="detail-name">
+                    <div>
+                      <p class="eyebrow detail-eyebrow">선택된 계정</p>
+                      <h2 id="accountDetailSiteName">아직 선택된 항목이 없습니다</h2>
+                    </div>
+                    <span class="status neutral" id="accountDetailStatus">대기</span>
+                  </div>
+                  <p class="panel-subtitle" id="accountDetailSummary">왼쪽 표에서 사이트 계정을 선택하면 상세 정보가 표시됩니다.</p>
+                </div>
+
+                <div class="detail-meta">
+                  <div class="detail-grid">
+                    <div class="detail-item">
+                      <span class="detail-item-label">URL</span>
+                      <span class="detail-item-value wrap-text" id="accountDetailUrl">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-item-label">ID</span>
+                      <span class="detail-item-value mono" id="accountDetailUsername">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-item-label">PW</span>
+                      <span class="detail-item-value mono" id="accountDetailPassword">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-item-label">비고</span>
+                      <span class="detail-item-value wrap-text" id="accountDetailNote">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-item-label">등록 시각</span>
+                      <span class="detail-item-value" id="accountDetailCreatedAt">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-item-label">최근 수정</span>
+                      <span class="detail-item-value" id="accountDetailUpdatedAt">-</span>
+                    </div>
+                  </div>
+
+                  <div class="note-box" id="accountDetailNoteBox">
+                    사이트 계정 정보는 내부 관리용으로 바로 수정할 수 있습니다.
+                  </div>
+
+                  <div class="detail-actions">
+                    <button class="primary-button" type="button" id="openSiteButton" disabled>사이트 열기</button>
+                    <button class="secondary-button" type="button" id="editAccountButton" disabled>수정</button>
+                    <button class="ghost-button" type="button" id="deleteAccountButton" disabled>삭제</button>
+                  </div>
+                </div>
+              </div>
+
+              <form class="editor-form is-hidden" id="accountEditorForm">
+                <div class="detail-top">
+                  <div class="detail-name">
+                    <div>
+                      <p class="eyebrow detail-eyebrow">편집 패널</p>
+                      <h2 id="accountEditorTitle">새 항목 추가</h2>
+                    </div>
+                    <span class="status warning" id="accountEditorStatus">편집 중</span>
+                  </div>
+                  <p class="panel-subtitle" id="accountEditorDescription">학교 내부에서 관리할 사이트 계정 정보를 입력하십시오.</p>
+                </div>
+
+                <div class="form-grid">
+                  <label class="field-block">
+                    <span>사이트</span>
+                    <input type="text" id="accountSiteNameInput" name="site_name" required />
+                  </label>
+                  <label class="field-block">
+                    <span>ID</span>
+                    <input type="text" id="accountUsernameInput" name="username" />
+                  </label>
+                  <label class="field-block field-span-2">
+                    <span>설명</span>
+                    <input type="text" id="accountDescriptionInput" name="description" />
+                  </label>
+                  <label class="field-block field-span-2">
+                    <span>URL</span>
+                    <input type="text" id="accountUrlInput" name="url" placeholder="https://example.com 또는 example.com" />
+                  </label>
+                  <label class="field-block field-span-2">
+                    <span>PW</span>
+                    <input type="text" id="accountPasswordInput" name="password" />
+                    <small id="accountPasswordHint">새 항목은 그대로 저장되고, 기존 항목은 비워 두면 변경하지 않습니다.</small>
+                  </label>
+                  <label class="field-block field-span-2">
+                    <span>비고</span>
+                    <textarea id="accountNoteInput" name="note" rows="4"></textarea>
+                  </label>
+                </div>
+
+                <div class="detail-actions">
+                  <button class="primary-button" type="submit" id="saveAccountButton">저장</button>
+                  <button class="secondary-button" type="button" id="cancelAccountEditButton">취소</button>
+                </div>
+              </form>
+            </aside>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="device-inventory">
+          <section class="page-intro">
+            <span class="eyebrow">기기 자산 관리</span>
+            <div class="page-title-row">
+              <div>
+                <h1>기기관리대장</h1>
+              </div>
+              <span class="sync-pill" id="deviceStatusPill">목록 준비 중</span>
+            </div>
+          </section>
+
+          <section class="search-panel">
+            <div class="device-toolbar">
+              <label class="search-input device-search-input">
+                <strong>검색</strong>
+                <input type="text" id="deviceSearchInput" placeholder="관리번호, 설치장소, 모델명, 사용자명, 비고 검색" aria-label="기기관리대장 검색" />
+              </label>
+              <div class="inventory-action-group">
+                <button class="primary-button" type="button" id="newDeviceButton">새 장비 추가</button>
+                <button class="secondary-button" type="button" id="deviceImportButton">CSV 가져오기</button>
+                <button class="secondary-button" type="button" id="deviceReportButton">보고서 다운</button>
+                <input type="file" id="deviceImportInput" accept=".csv,text/csv" class="is-visually-hidden" />
+              </div>
+            </div>
+
+            <div class="filter-row">
+              <button class="filter-chip active" type="button" data-device-filter="all">전체</button>
+              <button class="filter-chip" type="button" data-device-filter="교원용PC">교원용PC</button>
+              <button class="filter-chip" type="button" data-device-filter="정보교과실PC">정보교과실PC</button>
+              <button class="filter-chip" type="button" data-device-filter="디벗">디벗</button>
+              <button class="filter-chip" type="button" data-device-filter="전자칠판">전자칠판</button>
+              <button class="filter-chip" type="button" data-device-filter="태블릿(교무실)">태블릿(교무실)</button>
+              <button class="filter-chip" type="button" data-device-filter="태블릿(과학실)">태블릿(과학실)</button>
+              <button class="filter-chip" type="button" data-device-filter="특별실">특별실</button>
+              <button class="filter-chip" type="button" data-device-filter="진로상담실PC">진로상담실PC</button>
+            </div>
+
+          </section>
+
+          <section class="stats-grid" aria-label="device inventory summary">
+            <article class="stat-card">
+              <span class="stat-label">전체 기기</span>
+              <strong class="stat-value" id="deviceTotalValue">0</strong>
+              <span class="stat-meta">저장된 전체 기기</span>
+            </article>
+            <article class="stat-card success">
+              <span class="stat-label">정상 사용</span>
+              <strong class="stat-value" id="deviceNormalValue">0</strong>
+              <span class="stat-meta">즉시 사용 가능</span>
+            </article>
+            <article class="stat-card warning">
+              <span class="stat-label">내용연한 도달</span>
+              <strong class="stat-value" id="deviceRepairValue">0</strong>
+              <span class="stat-meta">교체 검토가 필요한 기기</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">수리 및 점검 필요</span>
+              <strong class="stat-value" id="deviceInspectionValue">0</strong>
+              <span class="stat-meta">상태 확인이 필요한 기기</span>
+            </article>
+          </section>
+
+          <section class="workspace inventory-workspace">
+            <div class="panel inventory-wide-panel">
+              <div class="panel-header">
+                <div class="panel-title-wrap">
+                  <h2 class="panel-title">기기 목록</h2>
+                  <span class="panel-subtitle" id="deviceResultMeta">정렬: 관리번호 오름차순</span>
+                </div>
+                <div class="panel-header-actions">
+                  <div class="account-feedback is-hidden" id="deviceFeedbackText" aria-live="polite"></div>
+                  <button class="secondary-button" type="button" id="refreshDevicesButton">목록 새로고침</button>
+                </div>
+              </div>
+              <div class="panel-body">
+                <table class="device-table">
+                  <thead>
+                    <tr>
+                      <th>관리번호</th>
+                      <th>설치장소</th>
+                      <th>형태</th>
+                      <th>제조회사</th>
+                      <th>모델명</th>
+                      <th>시리얼넘버</th>
+                      <th>CPU</th>
+                      <th>RAM</th>
+                      <th>구입시기</th>
+                      <th>사용연수</th>
+                      <th>상태</th>
+                      <th>비고</th>
+                      <th>사용자명</th>
+                      <th>제품이미지</th>
+                    </tr>
+                  </thead>
+                  <tbody id="deviceInventoryTableBody">
+                    <tr>
+                      <td colspan="14" class="empty-cell">저장된 기기 정보가 아직 없습니다.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="inline-editor-block">
+                <div id="deviceDetailView">
+                  <div class="detail-top">
+                    <div class="detail-name">
+                      <div>
+                        <p class="eyebrow detail-eyebrow">선택된 기기</p>
+                        <h2 id="deviceDetailName">아직 선택된 항목이 없습니다</h2>
+                      </div>
+                      <span class="status neutral" id="deviceDetailStatus">대기</span>
+                    </div>
+                    <p class="panel-subtitle" id="deviceDetailSummary">표에서 기기를 선택하면 아래에서 내용을 확인하고 바로 수정할 수 있습니다.</p>
+                  </div>
+
+                  <div class="detail-grid detail-grid-wide">
+                    <div class="detail-item"><span class="detail-item-label">관리번호</span><span class="detail-item-value mono wrap-text" id="deviceDetailManagementNo">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">분류</span><span class="detail-item-value wrap-text" id="deviceDetailGroup">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">설치장소</span><span class="detail-item-value wrap-text" id="deviceDetailLocation">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">형태</span><span class="detail-item-value wrap-text" id="deviceDetailType">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">제조회사</span><span class="detail-item-value wrap-text" id="deviceDetailManufacturer">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">모델명</span><span class="detail-item-value wrap-text" id="deviceDetailModelName">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">시리얼넘버</span><span class="detail-item-value mono wrap-text" id="deviceDetailSerialNumber">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">CPU</span><span class="detail-item-value wrap-text" id="deviceDetailCpu">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">RAM</span><span class="detail-item-value wrap-text" id="deviceDetailRam">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">구입시기</span><span class="detail-item-value" id="deviceDetailAcquiredAt">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">사용연수</span><span class="detail-item-value" id="deviceDetailAge">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">상태</span><span class="detail-item-value" id="deviceDetailStatusText">-</span></div>
+                    <div class="detail-item"><span class="detail-item-label">사용자명</span><span class="detail-item-value wrap-text" id="deviceDetailUser">-</span></div>
+                    <div class="detail-item field-span-2"><span class="detail-item-label">비고</span><span class="detail-item-value wrap-text" id="deviceDetailNote">-</span></div>
+                  </div>
+
+                  <div class="detail-actions">
+                    <button class="primary-button" type="button" id="editDeviceButton" disabled>수정</button>
+                    <button class="ghost-button" type="button" id="deleteDeviceButton" disabled>삭제</button>
+                  </div>
+                </div>
+
+                <form class="editor-form is-hidden" id="deviceEditorForm">
+                  <div class="detail-top">
+                    <div class="detail-name">
+                      <div>
+                        <p class="eyebrow detail-eyebrow">편집 패널</p>
+                        <h2 id="deviceEditorTitle">새 장비 추가</h2>
+                      </div>
+                      <span class="status warning" id="deviceEditorStatus">편집 중</span>
+                    </div>
+                    <p class="panel-subtitle" id="deviceEditorDescription">학교 내부에서 관리할 기기 정보를 입력하십시오.</p>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field-block"><span>관리번호</span><input type="text" id="deviceManagementNoInput" name="management_no" required /></label>
+                    <label class="field-block"><span>분류</span><select id="deviceGroupInput" name="asset_group"></select></label>
+                    <label class="field-block"><span>설치장소</span><input type="text" id="deviceLocationInput" name="location" /></label>
+                    <label class="field-block"><span>형태</span><select id="deviceTypeInput" name="device_type"></select></label>
+                    <label class="field-block"><span>제조회사</span><input type="text" id="deviceManufacturerInput" name="manufacturer" /></label>
+                    <label class="field-block"><span>모델명</span><input type="text" id="deviceModelNameInput" name="model_name" /></label>
+                    <label class="field-block"><span>시리얼넘버</span><input type="text" id="deviceSerialNumberInput" name="serial_number" /></label>
+                    <label class="field-block"><span>CPU</span><input type="text" id="deviceCpuInput" name="cpu" /></label>
+                    <label class="field-block"><span>RAM</span><input type="text" id="deviceRamInput" name="ram" /></label>
+                    <label class="field-block"><span>구입시기</span><input type="date" id="deviceAcquiredAtInput" name="acquired_at" /></label>
+                    <label class="field-block"><span>상태</span><select id="deviceStatusInput" name="status"></select></label>
+                    <label class="field-block"><span>사용자명</span><input type="text" id="deviceUserInput" name="assigned_user" /></label>
+                    <label class="field-block field-span-2"><span>제품이미지 URL</span><input type="url" id="deviceImageInput" name="image_url" placeholder="https://example.com/device-photo.jpg 또는 /assets/device-photo.jpg" /></label>
+                    <label class="field-block field-span-2"><span>비고</span><textarea id="deviceNoteInput" name="note" rows="4"></textarea></label>
+                  </div>
+
+                  <div class="detail-actions">
+                    <button class="primary-button" type="submit" id="saveDeviceButton">저장</button>
+                    <button class="secondary-button" type="button" id="cancelDeviceEditButton">취소</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </section>
+
+          <div class="image-lightbox is-hidden" id="deviceImageModal" aria-hidden="true">
+            <button class="image-lightbox-backdrop" type="button" id="deviceImageModalBackdrop" aria-label="이미지 닫기"></button>
+            <div class="image-lightbox-dialog">
+              <div class="image-lightbox-head">
+                <strong id="deviceImageModalTitle">제품이미지</strong>
+                <button class="ghost-button" type="button" id="deviceImageModalClose">닫기</button>
+              </div>
+              <div class="image-lightbox-frame">
+                <img id="deviceImageModalImage" src="" alt="제품이미지 미리보기" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="coming-soon">
+          <section class="page-intro">
+            <span class="eyebrow">다음 단계 준비</span>
+            <div class="page-title-row">
+              <div>
+                <h1>추가 모듈 준비 중</h1>
+                <p class="page-subtitle">설정과 보조 기능은 같은 디자인 기준으로 이어서 확장할 수 있도록 틀만 열어 두었습니다.</p>
+              </div>
+              <span class="sync-pill">준비 중</span>
+            </div>
+          </section>
+
+          <section class="panel placeholder-panel">
+            <div class="placeholder-stack">
+              <h2>현재 준비된 모듈</h2>
+              <p>지금 바로 사용할 수 있는 화면은 다음 두 가지입니다.</p>
+              <ul class="placeholder-list">
+                <li>기본 범위와 사용자 지정 범위를 모두 지원하는 IP 스캔</li>
+                <li>URL 아이콘 이동과 직접 수정이 가능한 사이트 계정 관리</li>
+                <li>이미지와 위치 정보를 함께 관리하는 기기관리대장</li>
+              </ul>
+              <p>기본 구조는 잡혀 있으므로, 이후에는 실제 운영 데이터 정리와 추가 규칙만 이어서 맞추면 됩니다.</p>
+            </div>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
