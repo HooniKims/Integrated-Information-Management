@@ -39,6 +39,7 @@ const {
 } = window.AuthUiUtils;
 
 const {
+  copyTextToClipboard,
   createCredentialCopyModel,
   getCredentialCopyFeedbackMessage,
   normalizeCredentialValue,
@@ -1106,7 +1107,7 @@ function clearResults() {
 
 async function copyAllResults() {
   try {
-    await navigator.clipboard.writeText(JSON.stringify(state.currentResults, null, 2));
+    await copyTextToClipboard(JSON.stringify(state.currentResults, null, 2));
     elements.progressText.textContent = "현재 필터 기준 결과를 클립보드에 복사했습니다.";
   } catch {
     elements.progressText.textContent = "클립보드 복사에 실패했습니다.";
@@ -1118,34 +1119,10 @@ async function copySelectedResult() {
     return;
   }
   try {
-    await navigator.clipboard.writeText(JSON.stringify(state.selectedResult, null, 2));
+    await copyTextToClipboard(JSON.stringify(state.selectedResult, null, 2));
     elements.progressText.textContent = "선택한 결과를 클립보드에 복사했습니다.";
   } catch {
     elements.progressText.textContent = "선택 결과 복사에 실패했습니다.";
-  }
-}
-
-async function copyTextToClipboard(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textArea = document.createElement("textarea");
-  textArea.value = text;
-  textArea.setAttribute("readonly", "");
-  textArea.style.position = "fixed";
-  textArea.style.opacity = "0";
-  textArea.style.pointerEvents = "none";
-  document.body.appendChild(textArea);
-  textArea.focus();
-  textArea.select();
-
-  const copied = document.execCommand("copy");
-  textArea.remove();
-
-  if (!copied) {
-    throw new Error("copy failed");
   }
 }
 

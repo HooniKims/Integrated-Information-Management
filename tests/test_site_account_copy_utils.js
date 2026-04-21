@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  copyTextToClipboard,
   createCredentialCopyModel,
   getCredentialCopyFeedbackMessage,
 } = require("../web/site-account-copy-utils.js");
@@ -48,4 +49,69 @@ test("복사 성공 피드백 문구를 만든다", () => {
   });
 
   assert.equal(message, "나이스 ID를 복사했습니다.");
+});
+
+test("copyTextToClipboard falls back to execCommand when clipboard write fails", async () => {
+  let appendedNode = null;
+  let removedNode = null;
+  const fakeBody = {
+    appendChild(node) {
+      appendedNode = node;
+      node.parentNode = fakeBody;
+    },
+    removeChild(node) {
+      removedNode = node;
+      node.parentNode = null;
+    },
+  };
+  const fakeDocument = {
+    body: fakeBody,
+    createElement() {
+      return {
+        style: {},
+        setAttribute() {},
+        focus() {},
+        select() {},
+        remove() {
+          fakeBody.removeChild(this);
+        },
+      };
+    },
+    execCommand(command) {
+      assert.equal(command, "copy");
+      return true;
+    },
+  };
+
+  const method = await copyTextToClipboard("teacher01", {
+    navigator: {
+      clipboard: {
+        async writeText() {
+          throw new Error("clipboard unavailable");
+        },
+      },
+    },
+    document: fakeDocument,
+  });
+
+  assert.equal(method, "execCommand");
+  assert.equal(appendedNode.value, "teacher01");
+  assert.equal(removedNode, appendedNode);
+});
+
+test("copyTextToClipboard keeps clipboard path when writeText succeeds", async () => {
+  let copiedValue = "";
+
+  const method = await copyTextToClipboard("pw-1234", {
+    navigator: {
+      clipboard: {
+        async writeText(value) {
+          copiedValue = value;
+        },
+      },
+    },
+  });
+
+  assert.equal(method, "clipboard");
+  assert.equal(copiedValue, "pw-1234");
 });
