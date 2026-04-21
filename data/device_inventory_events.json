@@ -1,3 +1,52 @@
 {
-  "events": []
+  "events": [
+    {
+      "event_id": "event-008",
+      "device_id": "device-008",
+      "management_no": "IIM-2019-003",
+      "event_type": "update",
+      "event_summary": "IIM-2019-003 점검중으로 상태 변경",
+      "event_at": "2026-04-20T08:55:00+09:00"
+    },
+    {
+      "event_id": "event-007",
+      "device_id": "device-006",
+      "management_no": "IIM-2022-026",
+      "event_type": "update",
+      "event_summary": "IIM-2022-026 수리중으로 상태 변경",
+      "event_at": "2026-04-20T15:05:00+09:00"
+    },
+    {
+      "event_id": "event-006",
+      "device_id": "device-004",
+      "management_no": "IIM-2022-007",
+      "event_type": "update",
+      "event_summary": "IIM-2022-007 전자칠판 점검 필요 등록",
+      "event_at": "2026-04-20T13:10:00+09:00"
+    },
+    {
+      "event_id": "event-005",
+      "device_id": "device-003",
+      "management_no": "IIM-2024-032",
+      "event_type": "import",
+      "event_summary": "IIM-2024-032 디벗 기기 등록",
+      "event_at": "2026-04-19T07:50:00+09:00"
+    },
+    {
+      "event_id": "event-004",
+      "device_id": "device-002",
+      "management_no": "IIM-2020-014",
+      "event_type": "update",
+      "event_summary": "IIM-2020-014 교체 검토 메모 갱신",
+      "event_at": "2026-04-18T09:15:00+09:00"
+    },
+    {
+      "event_id": "event-003",
+      "device_id": "device-001",
+      "management_no": "IIM-2021-001",
+      "event_type": "create",
+      "event_summary": "IIM-2021-001 등록",
+      "event_at": "2026-04-18T08:40:00+09:00"
+    }
+  ]
 }
