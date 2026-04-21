@@ -35,6 +35,10 @@ if not defined PYTHON_KIND (
   exit /b 1
 )
 
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$port=%APP_PORT%; $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if ($null -ne $listener) { $proc = Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $listener.OwningProcess) -ErrorAction SilentlyContinue; if ($proc -and $proc.Name -match '^pythonw?\.exe$' -and $proc.CommandLine -match 'server\.py') { Stop-Process -Id $listener.OwningProcess -Force; Start-Sleep -Seconds 1 } else { Write-Host ('Port ' + $port + ' is already in use.'); if ($proc) { Write-Host $proc.Name; Write-Host $proc.CommandLine; } exit 1 } }"
+if errorlevel 1 exit /b 1
+
 start "" powershell -NoProfile -ExecutionPolicy Bypass -Command "$url='%APP_URL%'; $healthUrl=$url + '/api/health'; for ($i=0; $i -lt 40; $i++) { try { Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -TimeoutSec 1 | Out-Null; Start-Process $url; exit 0 } catch { Start-Sleep -Milliseconds 500 } }"
 
 if /I "%PYTHON_KIND%"=="venv" (

@@ -4,5 +4,6 @@ __pycache__/
 .server.out.log
 .run/
 .venv/
+.env
 Thumbs.db
 .DS_Store

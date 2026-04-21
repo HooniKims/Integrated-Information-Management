@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import secrets
+import threading
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -15,8 +18,40 @@ from site_accounts import SiteAccountRepository
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 DATA_DIR = ROOT / "data"
-HOST = os.environ.get("APP_HOST", "0.0.0.0")
-PORT = int(os.environ.get("APP_PORT", "8765"))
+
+
+def load_env_file(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+
+    loaded: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        normalized = value.strip().strip('"').strip("'")
+        loaded[key.strip()] = normalized
+    return loaded
+
+
+APP_ENV = load_env_file(ROOT / ".env")
+
+
+def get_setting(name: str, default: str = "") -> str:
+    return os.environ.get(name, APP_ENV.get(name, default))
+
+
+HOST = get_setting("APP_HOST", "0.0.0.0")
+PORT = int(get_setting("APP_PORT", "8765"))
+APP_AUTH_CONFIG = {
+    "login_id": get_setting("DCMS_LOGIN_ID"),
+    "login_password": get_setting("DCMS_LOGIN_PASSWORD"),
+}
+SESSION_COOKIE_NAME = "dcms_session"
+PUBLIC_API_PATHS = {"/api/health", "/api/login", "/api/logout", "/api/session"}
+SESSIONS: dict[str, dict[str, str]] = {}
+SESSION_LOCK = threading.Lock()
 
 SCAN_MANAGER = ScanManager()
 SITE_ACCOUNT_REPOSITORY = SiteAccountRepository(DATA_DIR / "site_accounts.json", DATA_DIR / "site_account_audit.json")
@@ -34,8 +69,19 @@ class AppHandler(BaseHTTPRequestHandler):
         path = parsed.path
         query = parse_qs(parsed.query)
 
+        if self._requires_auth(path) and not self._ensure_authenticated():
+            return
+
         if path == "/api/health":
             self._send_json({"ok": True})
+            return
+
+        if path == "/api/session":
+            session = self._get_authenticated_session()
+            payload: dict[str, object] = {"authenticated": bool(session)}
+            if session:
+                payload["username"] = session["username"]
+            self._send_json(payload)
             return
 
         if path == "/api/self":
@@ -122,6 +168,46 @@ class AppHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if self._requires_auth(path) and not self._ensure_authenticated():
+            return
+
+        if path == "/api/login":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_json({"error": "로그인 요청 형식이 올바르지 않습니다."}, status=HTTPStatus.BAD_REQUEST)
+                return
+
+            configured_id = str(APP_AUTH_CONFIG.get("login_id", "") or "")
+            configured_password = str(APP_AUTH_CONFIG.get("login_password", "") or "")
+            if not configured_id or not configured_password:
+                self._send_json({"error": "로그인 환경설정이 없습니다."}, status=HTTPStatus.SERVICE_UNAVAILABLE)
+                return
+
+            submitted_id = str(payload.get("username", payload.get("id", "")) or "").strip()
+            submitted_password = str(payload.get("password", "") or "")
+
+            if not (
+                secrets.compare_digest(submitted_id, configured_id)
+                and secrets.compare_digest(submitted_password, configured_password)
+            ):
+                self._send_json({"error": "아이디 또는 비밀번호가 올바르지 않습니다."}, status=HTTPStatus.UNAUTHORIZED)
+                return
+
+            token = self._create_session(submitted_id)
+            self._send_json(
+                {"authenticated": True, "username": submitted_id},
+                extra_headers={"Set-Cookie": self._build_session_cookie(token)},
+            )
+            return
+
+        if path == "/api/logout":
+            self._delete_session()
+            self._send_json(
+                {"authenticated": False},
+                extra_headers={"Set-Cookie": self._build_session_cookie("", max_age=0)},
+            )
+            return
+
         if path == "/api/site-accounts":
             payload = self._read_json_body()
             if payload is None:
@@ -198,6 +284,9 @@ class AppHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if self._requires_auth(path) and not self._ensure_authenticated():
+            return
+
         if path.startswith("/api/device-inventory/") and path.count("/") == 3:
             payload = self._read_json_body()
             if payload is None:
@@ -237,6 +326,9 @@ class AppHandler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if self._requires_auth(path) and not self._ensure_authenticated():
+            return
 
         if path.startswith("/api/device-inventory/") and path.count("/") == 3:
             device_id = path.rsplit("/", 1)[-1]
@@ -312,11 +404,81 @@ class AppHandler(BaseHTTPRequestHandler):
             return forwarded_for.split(",")[0].strip()
         return self.client_address[0]
 
-    def _send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
+    def _requires_auth(self, path: str) -> bool:
+        return path.startswith("/api/") and path not in PUBLIC_API_PATHS
+
+    def _cookie_value(self, name: str) -> str | None:
+        header = self.headers.get("Cookie", "")
+        if not header:
+            return None
+
+        cookie = SimpleCookie()
+        try:
+            cookie.load(header)
+        except Exception:
+            return None
+
+        morsel = cookie.get(name)
+        if morsel is None:
+            return None
+        return morsel.value
+
+    def _build_session_cookie(self, token: str, *, max_age: int | None = None) -> str:
+        cookie = SimpleCookie()
+        cookie[SESSION_COOKIE_NAME] = token
+        morsel = cookie[SESSION_COOKIE_NAME]
+        morsel["path"] = "/"
+        morsel["httponly"] = True
+        morsel["samesite"] = "Lax"
+        if max_age is not None:
+            morsel["max-age"] = str(max_age)
+            if max_age == 0:
+                morsel["expires"] = "Thu, 01 Jan 1970 00:00:00 GMT"
+        return morsel.OutputString()
+
+    def _create_session(self, username: str) -> str:
+        token = secrets.token_urlsafe(32)
+        with SESSION_LOCK:
+            SESSIONS[token] = {
+                "username": username,
+                "ip": self._client_ip(),
+            }
+        return token
+
+    def _get_authenticated_session(self) -> dict[str, str] | None:
+        token = self._cookie_value(SESSION_COOKIE_NAME)
+        if not token:
+            return None
+        with SESSION_LOCK:
+            session = SESSIONS.get(token)
+            return dict(session) if session else None
+
+    def _delete_session(self) -> None:
+        token = self._cookie_value(SESSION_COOKIE_NAME)
+        if not token:
+            return
+        with SESSION_LOCK:
+            SESSIONS.pop(token, None)
+
+    def _ensure_authenticated(self) -> bool:
+        if self._get_authenticated_session():
+            return True
+        self._send_json({"error": "로그인이 필요합니다."}, status=HTTPStatus.UNAUTHORIZED)
+        return False
+
+    def _send_json(
+        self,
+        payload: object,
+        status: HTTPStatus = HTTPStatus.OK,
+        *,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        for key, value in (extra_headers or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)
 

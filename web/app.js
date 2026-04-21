@@ -1,4 +1,8 @@
 const state = {
+  authenticated: false,
+  authReady: false,
+  authUser: "",
+  appInitialized: false,
   currentView: "ip-scan",
   currentJobId: null,
   currentFilter: "all",
@@ -13,6 +17,7 @@ const state = {
   selectedAccountId: null,
   accountEditorMode: "detail",
   siteAccountsLoaded: false,
+  accountCopyStatus: {},
   deviceInventory: [],
   deviceInventoryFilter: "all",
   deviceInventorySearchQuery: "",
@@ -29,7 +34,18 @@ const DEFAULT_RANGE = {
   endIp: "10.73.78.254",
 };
 
+const {
+  describeAuthServerErrorMessage,
+} = window.AuthUiUtils;
+
+const {
+  createCredentialCopyModel,
+  getCredentialCopyFeedbackMessage,
+  normalizeCredentialValue,
+} = window.SiteAccountCopyUtils;
+
 let deviceFeedbackTimerId = null;
+const accountCopyStatusTimerIds = new Map();
 
 const VIEW_META = {
   "ip-scan": {
@@ -65,11 +81,21 @@ const VIEW_META = {
 };
 
 const elements = {
+  loginShell: document.getElementById("loginShell"),
+  appShell: document.getElementById("appShell"),
+  loginForm: document.getElementById("loginForm"),
+  loginIdInput: document.getElementById("loginIdInput"),
+  loginPasswordInput: document.getElementById("loginPasswordInput"),
+  loginFeedbackText: document.getElementById("loginFeedbackText"),
+  loginSubmitButton: document.getElementById("loginSubmitButton"),
+  loginFooterText: document.getElementById("loginFooterText"),
   activeModuleLabel: document.getElementById("activeModuleLabel"),
   topbarContextLabel: document.getElementById("topbarContextLabel"),
   topbarContextValue: document.getElementById("topbarContextValue"),
   sidebarFooterText: document.getElementById("sidebarFooterText"),
   localHostMeta: document.getElementById("localHostMeta"),
+  sessionUserMeta: document.getElementById("sessionUserMeta"),
+  logoutButton: document.getElementById("logoutButton"),
   navItems: Array.from(document.querySelectorAll("[data-view]")),
   viewPanels: Array.from(document.querySelectorAll("[data-view-panel]")),
 
@@ -571,6 +597,89 @@ function setTopbarForView(view) {
   elements.sidebarFooterText.innerHTML = `<strong>현재 초점</strong><br />${escapeHtml(meta.sidebar)}`;
 }
 
+function setLoginFooterYear() {
+  elements.loginFooterText.textContent = `${new Date().getFullYear()} DCMS`;
+}
+
+function setLoginFeedback(message) {
+  elements.loginFeedbackText.textContent = message;
+}
+
+function setSessionUserMeta(username = "") {
+  elements.sessionUserMeta.textContent = username ? `로그인 계정 ${username}` : "로그인 필요";
+}
+
+function showLoginShell(message) {
+  state.authenticated = false;
+  state.authUser = "";
+  elements.appShell.classList.add("is-hidden");
+  elements.loginShell.classList.remove("is-hidden");
+  elements.logoutButton.disabled = true;
+  elements.loginPasswordInput.value = "";
+  setSessionUserMeta("");
+  if (message) {
+    setLoginFeedback(message);
+  }
+  window.setTimeout(() => {
+    elements.loginIdInput.focus();
+  }, 0);
+}
+
+function initializeAppShell() {
+  if (state.appInitialized) {
+    return;
+  }
+
+  state.appInitialized = true;
+  setIdleState();
+  applyDefaultRange(false);
+  populateDeviceSelectOptions();
+  resetDetailPanel();
+  resetAccountDetail();
+  resetDeviceDetail();
+  setTopbarForView("ip-scan");
+}
+
+async function showAuthenticatedApp(username) {
+  state.authenticated = true;
+  state.authReady = true;
+  state.authUser = username;
+  elements.loginShell.classList.add("is-hidden");
+  elements.appShell.classList.remove("is-hidden");
+  elements.logoutButton.disabled = false;
+  setSessionUserMeta(username);
+  initializeAppShell();
+  await loadLocalHost();
+  switchView(state.currentView || "ip-scan");
+}
+
+function handleAuthenticationRequired(message = "세션이 만료되었습니다. 다시 로그인해 주세요.") {
+  if (!state.authenticated && state.authReady) {
+    showLoginShell(message);
+    return;
+  }
+
+  state.authReady = true;
+  state.currentJobId = null;
+  stopPolling();
+  showLoginShell(message);
+}
+
+async function checkSession() {
+  try {
+    const session = await fetchJson("/api/session", { headers: {}, ignoreAuthError: true });
+    state.authReady = true;
+    if (session.authenticated) {
+      await showAuthenticatedApp(session.username || "dcms");
+      return;
+    }
+    showLoginShell("아이디와 비밀번호를 입력해 주세요.");
+  } catch (error) {
+    state.authReady = true;
+    showLoginShell(describeAuthServerErrorMessage(error.message || "세션 상태를 확인하지 못했습니다."));
+  }
+}
+
 function switchView(view) {
   const panelView = elements.viewPanels.some((panel) => panel.dataset.viewPanel === view) ? view : "coming-soon";
   state.currentView = view;
@@ -790,16 +899,25 @@ function resetDetailPanel() {
 }
 
 async function fetchJson(url, options = {}) {
+  const {
+    headers: customHeaders = {},
+    ignoreAuthError = false,
+    ...requestOptions
+  } = options;
   const response = await fetch(url, {
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...customHeaders,
     },
-    ...options,
+    ...requestOptions,
   });
 
-  const data = await response.json();
+  const rawText = await response.text();
+  const data = rawText ? JSON.parse(rawText) : {};
   if (!response.ok) {
+    if (response.status === 401 && !ignoreAuthError) {
+      handleAuthenticationRequired(data.error || "로그인이 필요합니다.");
+    }
     throw new Error(data.error || "요청 처리에 실패했습니다.");
   }
   return data;
@@ -826,6 +944,53 @@ async function loadLocalHost() {
   } catch (error) {
     elements.localHostMeta.textContent = "서버 호스트 정보 확인 실패";
     elements.lanUrlBox.textContent = "내부망 접속 주소 확인 실패";
+  }
+}
+
+async function handleLoginSubmit(event) {
+  event.preventDefault();
+  const username = elements.loginIdInput.value.trim();
+  const password = elements.loginPasswordInput.value;
+
+  if (!username || !password) {
+    setLoginFeedback("아이디와 비밀번호를 모두 입력해 주세요.");
+    return;
+  }
+
+  elements.loginSubmitButton.disabled = true;
+  setLoginFeedback("로그인 정보를 확인하는 중입니다.");
+
+  try {
+    const result = await fetchJson("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+      ignoreAuthError: true,
+    });
+    elements.loginPasswordInput.value = "";
+    await showAuthenticatedApp(result.username || username);
+  } catch (error) {
+    elements.loginPasswordInput.value = "";
+    setLoginFeedback(describeAuthServerErrorMessage(error.message));
+    elements.loginPasswordInput.focus();
+  } finally {
+    elements.loginSubmitButton.disabled = false;
+  }
+}
+
+async function handleLogout() {
+  elements.logoutButton.disabled = true;
+
+  try {
+    await fetchJson("/api/logout", {
+      method: "POST",
+      body: JSON.stringify({}),
+      ignoreAuthError: true,
+    });
+    showLoginShell("로그아웃되었습니다.");
+  } catch (error) {
+    showLoginShell(error.message || "로그아웃 처리에 실패했습니다.");
+  } finally {
+    elements.loginIdInput.focus();
   }
 }
 
@@ -960,6 +1125,30 @@ async function copySelectedResult() {
   }
 }
 
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  textArea.style.pointerEvents = "none";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  const copied = document.execCommand("copy");
+  textArea.remove();
+
+  if (!copied) {
+    throw new Error("copy failed");
+  }
+}
+
 function activateFilter(button) {
   elements.filterButtons.forEach((target) => target.classList.toggle("active", target === button));
   state.currentFilter = button.dataset.filter;
@@ -981,6 +1170,140 @@ function handleResultSearch() {
 
 function setAccountFeedback(message) {
   elements.accountFeedbackText.textContent = message;
+}
+
+function getAccountCredentialKey(accountId, field) {
+  return `${accountId}:${field}`;
+}
+
+function getAccountCredentialLabel(field) {
+  return field === "password" ? "PW" : "ID";
+}
+
+function getAccountCredentialStatus(accountId, field) {
+  if (!accountId) {
+    return "idle";
+  }
+  return state.accountCopyStatus[getAccountCredentialKey(accountId, field)] || "idle";
+}
+
+function clearAccountCredentialTimer(key) {
+  const timerId = accountCopyStatusTimerIds.get(key);
+  if (!timerId) {
+    return;
+  }
+  window.clearTimeout(timerId);
+  accountCopyStatusTimerIds.delete(key);
+}
+
+function bindAccountCredentialButtons() {
+  Array.from(document.querySelectorAll(".credential-copy-button")).forEach((button) => {
+    if (button.disabled || button.dataset.copyBound === "true") {
+      return;
+    }
+
+    button.dataset.copyBound = "true";
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await copySiteAccountCredential(button.dataset.copyAccountId, button.dataset.copyField);
+    });
+  });
+}
+
+function renderAccountCredentialButton(account, field, variant = "table") {
+  const label = getAccountCredentialLabel(field);
+  const accountId = account?.id || "";
+  const siteName = account?.site_name || "선택된 계정";
+  const model = createCredentialCopyModel(account?.[field], getAccountCredentialStatus(accountId, field));
+  const buttonClassName = [
+    "credential-copy-button",
+    `credential-copy-button--${variant}`,
+    model.statusClassName,
+  ].join(" ");
+
+  return `
+    <button
+      class="${buttonClassName}"
+      type="button"
+      data-copy-account-id="${escapeHtml(accountId)}"
+      data-copy-field="${escapeHtml(field)}"
+      aria-label="${escapeHtml(`${siteName} ${label} 복사`)}"
+      ${model.disabled ? "disabled" : ""}
+    >
+      <span class="credential-copy-value">${escapeHtml(model.displayValue)}</span>
+      <span class="credential-copy-hint">${escapeHtml(model.hintText)}</span>
+    </button>
+  `;
+}
+
+function setAccountCredentialStatus(accountId, field, status) {
+  if (!accountId) {
+    return;
+  }
+
+  const key = getAccountCredentialKey(accountId, field);
+  clearAccountCredentialTimer(key);
+
+  if (status === "idle") {
+    delete state.accountCopyStatus[key];
+  } else {
+    state.accountCopyStatus[key] = status;
+    const timerId = window.setTimeout(() => {
+      delete state.accountCopyStatus[key];
+      accountCopyStatusTimerIds.delete(key);
+      renderSiteAccounts();
+    }, 1600);
+    accountCopyStatusTimerIds.set(key, timerId);
+  }
+
+  renderSiteAccounts();
+}
+
+async function copySiteAccountCredential(accountId, field) {
+  const account = state.siteAccounts.find((item) => item.id === accountId);
+  if (!account) {
+    return;
+  }
+
+  const fieldLabel = getAccountCredentialLabel(field);
+  const normalizedValue = normalizeCredentialValue(account[field]);
+  const hasValue = normalizedValue.length > 0;
+
+  if (!hasValue) {
+    setAccountFeedback(
+      getCredentialCopyFeedbackMessage({
+        siteName: account.site_name,
+        fieldLabel,
+        success: false,
+        hasValue: false,
+      })
+    );
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(normalizedValue);
+    setAccountFeedback(
+      getCredentialCopyFeedbackMessage({
+        siteName: account.site_name,
+        fieldLabel,
+        success: true,
+        hasValue: true,
+      })
+    );
+    setAccountCredentialStatus(accountId, field, "copied");
+  } catch {
+    setAccountFeedback(
+      getCredentialCopyFeedbackMessage({
+        siteName: account.site_name,
+        fieldLabel,
+        success: false,
+        hasValue: true,
+      })
+    );
+    setAccountCredentialStatus(accountId, field, "failed");
+  }
 }
 
 function setAccountSummary(summary = {}) {
@@ -1034,8 +1357,8 @@ function resetAccountDetail() {
   elements.accountDetailStatus.className = "status neutral";
   elements.accountDetailSummary.textContent = "왼쪽 표에서 사이트 계정을 선택하면 상세 정보가 표시됩니다.";
   elements.accountDetailUrl.textContent = "-";
-  elements.accountDetailUsername.textContent = "-";
-  elements.accountDetailPassword.textContent = "-";
+  elements.accountDetailUsername.innerHTML = renderAccountCredentialButton(null, "username", "detail");
+  elements.accountDetailPassword.innerHTML = renderAccountCredentialButton(null, "password", "detail");
   elements.accountDetailNote.textContent = "-";
   elements.accountDetailCreatedAt.textContent = "-";
   elements.accountDetailUpdatedAt.textContent = "-";
@@ -1043,6 +1366,7 @@ function resetAccountDetail() {
   elements.openSiteButton.disabled = true;
   elements.editAccountButton.disabled = true;
   elements.deleteAccountButton.disabled = true;
+  bindAccountCredentialButtons();
 }
 
 function renderSelectedAccount() {
@@ -1061,24 +1385,30 @@ function renderSelectedAccount() {
     return;
   }
 
-  const hasPassword = Boolean(account.password);
+  const hasUsername = Boolean(normalizeCredentialValue(account.username));
+  const hasPassword = Boolean(normalizeCredentialValue(account.password));
 
   elements.accountDetailSiteName.textContent = account.site_name;
   elements.accountDetailStatus.textContent = hasPassword ? "저장됨" : "비밀번호 없음";
   elements.accountDetailStatus.className = `status ${hasPassword ? "healthy" : "warning"}`;
   elements.accountDetailSummary.textContent = account.description || "설명이 아직 없습니다.";
   elements.accountDetailUrl.textContent = account.url || "-";
-  elements.accountDetailUsername.textContent = account.username || "-";
-  elements.accountDetailPassword.textContent = account.password || "-";
+  elements.accountDetailUsername.innerHTML = renderAccountCredentialButton(account, "username", "detail");
+  elements.accountDetailPassword.innerHTML = renderAccountCredentialButton(account, "password", "detail");
   elements.accountDetailNote.textContent = account.note || "-";
   elements.accountDetailCreatedAt.textContent = formatTime(account.created_at);
   elements.accountDetailUpdatedAt.textContent = formatTime(account.updated_at);
-  elements.accountDetailNoteBox.textContent = hasPassword
-    ? "비밀번호는 내부 관리 편의를 위해 저장된 값을 그대로 표시합니다."
-    : "아직 비밀번호가 등록되지 않았습니다. 수정 버튼으로 바로 입력할 수 있습니다.";
+  elements.accountDetailNoteBox.textContent = hasUsername && hasPassword
+    ? "저장된 ID와 비밀번호를 클릭하면 바로 복사할 수 있습니다."
+    : hasUsername
+      ? "저장된 ID는 클릭하면 복사됩니다. 비밀번호는 아직 등록되지 않았습니다."
+      : hasPassword
+        ? "저장된 비밀번호는 클릭하면 복사됩니다. ID는 아직 등록되지 않았습니다."
+        : "ID와 비밀번호가 아직 등록되지 않았습니다. 수정 버튼으로 바로 입력할 수 있습니다.";
   elements.openSiteButton.disabled = !account.url;
   elements.editAccountButton.disabled = false;
   elements.deleteAccountButton.disabled = false;
+  bindAccountCredentialButtons();
 }
 
 function renderSiteAccounts() {
@@ -1117,8 +1447,8 @@ function renderSiteAccounts() {
           </td>
           <td class="wrap-cell">${escapeHtml(item.description || "-")}</td>
           <td>${urlCell}</td>
-          <td><span class="mono">${escapeHtml(item.username || "-")}</span></td>
-          <td><span class="password-badge">${escapeHtml(item.password || "-")}</span></td>
+          <td>${renderAccountCredentialButton(item, "username")}</td>
+          <td>${renderAccountCredentialButton(item, "password")}</td>
           <td class="wrap-cell site-account-note-cell">${escapeHtml(item.note || "-")}</td>
         </tr>
       `;
@@ -1704,6 +2034,11 @@ async function downloadDeviceReport() {
   const fallbackName = `기기관리대장_보고서_${new Date().toISOString().slice(0, 10)}.xlsx`;
   try {
     const response = await fetch("/api/device-inventory/report-xlsx", { headers: {} });
+    if (response.status === 401) {
+      const payload = await response.json();
+      handleAuthenticationRequired(payload.error || "로그인이 필요합니다.");
+      throw new Error(payload.error || "로그인이 필요합니다.");
+    }
     if (!response.ok) {
       throw new Error("보고서 다운로드 요청에 실패했습니다.");
     }
@@ -1722,6 +2057,8 @@ async function handleRefreshDevices() {
   await loadDeviceInventory({ showRefreshFeedback: true });
 }
 
+elements.loginForm.addEventListener("submit", handleLoginSubmit);
+elements.logoutButton.addEventListener("click", handleLogout);
 elements.navItems.forEach((button) => {
   button.addEventListener("click", () => switchView(button.dataset.view));
 });
@@ -1785,12 +2122,6 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-setIdleState();
-applyDefaultRange(false);
-populateDeviceSelectOptions();
-resetDetailPanel();
-resetAccountDetail();
-resetDeviceDetail();
-setTopbarForView("ip-scan");
-loadLocalHost();
-switchView("ip-scan");
+setLoginFooterYear();
+setSessionUserMeta("");
+checkSession();

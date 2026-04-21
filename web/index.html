@@ -3,15 +3,62 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>정보부 업무 웹앱</title>
+  <title>DCMS 정보화 시스템</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <div class="login-shell" id="loginShell">
+    <main class="login-stage">
+      <section class="login-hero">
+        <span class="eyebrow">DCMS</span>
+        <div class="login-hero-copy">
+          <p class="login-label">학교 내부망 운영</p>
+          <h1 class="login-title">DCMS 정보화 시스템</h1>
+          <p class="login-subtitle">등촌중학교 정보부 업무 보조 시스템</p>
+        </div>
+        <ul class="login-feature-list">
+          <li>IP 스캔, 사이트 계정 관리, 기기관리대장을 한 곳에서 확인합니다.</li>
+          <li>검색과 상태 확인을 먼저 배치한 내부 업무용 운영 화면입니다.</li>
+          <li>로그인 후 바로 현재 업무 화면으로 이어집니다.</li>
+        </ul>
+      </section>
+
+      <section class="login-panel">
+        <div class="login-panel-head">
+          <span class="product-chip">
+            <span class="product-dot"></span>
+            <span>DCMS Secure Access</span>
+          </span>
+          <h2>내부 계정 로그인</h2>
+          <p>학교 내부용 계정으로 로그인한 뒤 업무 화면에 접근할 수 있습니다.</p>
+        </div>
+
+        <form class="login-form" id="loginForm">
+          <div class="login-feedback" id="loginFeedbackText" aria-live="polite">아이디와 비밀번호를 입력해 주세요.</div>
+
+          <label class="field-block">
+            <span>아이디</span>
+            <input type="text" id="loginIdInput" name="username" autocomplete="username" required />
+          </label>
+
+          <label class="field-block">
+            <span>비밀번호</span>
+            <input type="password" id="loginPasswordInput" name="password" autocomplete="current-password" required />
+          </label>
+
+          <button class="primary-button login-submit-button" type="submit" id="loginSubmitButton">로그인</button>
+        </form>
+      </section>
+    </main>
+
+    <footer class="login-footer" id="loginFooterText"></footer>
+  </div>
+
+  <div class="app-shell is-hidden" id="appShell">
     <aside class="sidebar">
       <div class="brand-block">
-        <h2 class="brand-title">정보부 업무 웹앱</h2>
-        <p class="brand-subtitle">학교 내부망 운영 도구</p>
+        <h2 class="brand-title">DCMS 정보화 시스템</h2>
+        <p class="brand-subtitle">등촌중학교 정보부 업무 보조 시스템</p>
       </div>
 
       <div class="nav-group">
@@ -53,6 +100,8 @@
       </div>
       <div class="topbar-right">
         <span class="topbar-meta" id="localHostMeta">서버 호스트 확인 중...</span>
+        <span class="topbar-meta" id="sessionUserMeta">로그인 확인 중...</span>
+        <button class="secondary-button" type="button" id="logoutButton">로그아웃</button>
       </div>
     </header>
 
@@ -635,6 +684,8 @@
     </main>
   </div>
 
+  <script src="/auth-ui-utils.js" defer></script>
+  <script src="/site-account-copy-utils.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>
