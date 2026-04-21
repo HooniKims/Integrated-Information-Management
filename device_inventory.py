@@ -9,11 +9,30 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 
 EXPECTED_LIFE_CYCLE_YEARS = 5
+
+BG_PAGE = "F5F7FA"
+BG_SURFACE = "FFFFFF"
+BG_SUBTLE = "EEF2F6"
+LINE_DEFAULT = "D6DEE8"
+LINE_STRONG = "B8C4D3"
+TEXT_PRIMARY = "15202B"
+TEXT_SECONDARY = "445266"
+TEXT_MUTED = "69788C"
+TEXT_INVERSE = "FFFFFF"
+ACCENT_PRIMARY = "1F4E79"
+ACCENT_SOFT = "DCE8F5"
+SUCCESS = "2E7D32"
+SUCCESS_SOFT = "E6F4EA"
+WARNING = "B26A00"
+WARNING_SOFT = "FFF4DD"
+DANGER = "C62828"
+DANGER_SOFT = "FDECEC"
 
 
 def utc_now_iso() -> str:
@@ -235,39 +254,17 @@ class DeviceInventoryRepository:
 
     def export_report_workbook(self) -> bytes:
         workbook = Workbook()
-        sheet = workbook.active
-        sheet.title = "기기관리대장"
+        devices = self.list_devices()
+        workbook.active.title = "대시보드"
 
-        headers = self.csv_headers
-        sheet.append(headers)
+        self._write_dashboard_sheet(workbook["대시보드"], devices)
+        self._write_full_inventory_sheet(workbook.create_sheet("전체대장"), devices)
 
-        header_fill = PatternFill(fill_type="solid", fgColor="DCE8F5")
-        thin_border = Border(
-            left=Side(style="thin", color="D6DEE8"),
-            right=Side(style="thin", color="D6DEE8"),
-            top=Side(style="thin", color="D6DEE8"),
-            bottom=Side(style="thin", color="D6DEE8"),
-        )
-
-        for column_index, title in enumerate(headers, start=1):
-            cell = sheet.cell(row=1, column=column_index)
-            cell.font = Font(bold=True, color="15202B")
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = thin_border
-            sheet.column_dimensions[get_column_letter(column_index)].width = max(14, len(str(title)) + 4)
-
-        for device in self.list_devices():
-            row = [self._device_to_csv_row(device).get(header, "") for header in headers]
-            sheet.append(row)
-
-        for row in sheet.iter_rows(min_row=2):
-            for cell in row:
-                cell.alignment = Alignment(vertical="top", wrap_text=True)
-                cell.border = thin_border
-
-        sheet.auto_filter.ref = f"A1:{get_column_letter(sheet.max_column)}{sheet.max_row}"
-        sheet.freeze_panes = "A2"
+        used_titles = {"대시보드", "전체대장"}
+        for location_title, location_devices in self._group_devices_by_location(devices):
+            safe_title = self._normalize_sheet_title(location_title, used_titles)
+            used_titles.add(safe_title)
+            self._write_location_inventory_sheet(workbook.create_sheet(safe_title), safe_title, location_devices)
 
         buffer = io.BytesIO()
         workbook.save(buffer)
@@ -290,6 +287,283 @@ class DeviceInventoryRepository:
             "life_cycle_due": sum(1 for item in devices if item.get("life_cycle_due")),
             "repair_or_inspection_needed": sum(1 for item in devices if item.get("repair_or_inspection_needed")),
         }
+
+    def _group_devices_by_location(self, devices: list[dict]) -> list[tuple[str, list[dict]]]:
+        grouped: dict[str, list[dict]] = {}
+        for device in devices:
+            location = self._normalize_sheet_title(device.get("location", ""))
+            grouped.setdefault(location, []).append(device)
+        return sorted(grouped.items(), key=lambda item: item[0].casefold())
+
+    def _normalize_sheet_title(self, raw_value: object, existing_titles: set[str] | None = None) -> str:
+        base = self._normalize_text(raw_value) or "미지정"
+        invalid_chars = set("[]:*?/\\")
+        cleaned = "".join(char for char in base if char not in invalid_chars).strip() or "미지정"
+        cleaned = cleaned[:31].rstrip() or "미지정"
+        existing_titles = existing_titles or set()
+        if cleaned not in existing_titles:
+            return cleaned
+
+        counter = 2
+        while True:
+            suffix = f" ({counter})"
+            trimmed = cleaned[: 31 - len(suffix)].rstrip()
+            candidate = f"{trimmed}{suffix}"
+            if candidate not in existing_titles:
+                return candidate
+            counter += 1
+
+    def _summarize_locations(self, devices: list[dict]) -> list[tuple[str, int]]:
+        counts: dict[str, int] = {}
+        for device in devices:
+            location = self._normalize_text(device.get("location")) or "미지정"
+            counts[location] = counts.get(location, 0) + 1
+        return sorted(counts.items(), key=lambda item: (-item[1], item[0].casefold()))
+
+    def _summarize_statuses(self, devices: list[dict]) -> dict[str, int]:
+        return {
+            "정상 사용": sum(1 for item in devices if item.get("status") == "정상 사용"),
+            "점검 필요": sum(1 for item in devices if item.get("repair_or_inspection_needed")),
+            "교체 검토": sum(1 for item in devices if item.get("life_cycle_due")),
+        }
+
+    def _write_dashboard_sheet(self, sheet, devices: list[dict]) -> None:
+        title_fill = PatternFill(fill_type="solid", fgColor=ACCENT_PRIMARY)
+        header_fill = PatternFill(fill_type="solid", fgColor=BG_SUBTLE)
+        subtle_fill = PatternFill(fill_type="solid", fgColor=BG_PAGE)
+        accent_fill = PatternFill(fill_type="solid", fgColor=ACCENT_SOFT)
+        surface_fill = PatternFill(fill_type="solid", fgColor=BG_SURFACE)
+        border = self._build_thin_border()
+        strong_border = self._build_strong_border()
+        location_rows = self._summarize_locations(devices)
+        status_summary = self._summarize_statuses(devices)
+
+        sheet.merge_cells("A1:F1")
+        sheet.merge_cells("A2:F2")
+        sheet["A1"] = "DCMS 기기관리대장"
+        sheet["A2"] = "설치장소별 자산 분포 요약"
+        sheet["A1"].font = Font(size=18, bold=True, color=TEXT_INVERSE)
+        sheet["A2"].font = Font(size=11, color=TEXT_SECONDARY)
+        sheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+        sheet["A2"].alignment = Alignment(horizontal="left", vertical="center")
+        sheet["A1"].fill = title_fill
+        sheet["A2"].fill = header_fill
+        sheet["A1"].border = strong_border
+        sheet["A2"].border = border
+
+        sheet["A5"] = "전체 장비 수"
+        sheet["B5"] = len(devices)
+        sheet["C5"] = "설치장소 수"
+        sheet["D5"] = len(location_rows)
+        top_location = location_rows[0][0] if location_rows else "-"
+        sheet["E5"] = "최다 보유 장소"
+        sheet["F5"] = top_location
+
+        sheet["A8"] = "정상 사용"
+        sheet["B8"] = status_summary["정상 사용"]
+        sheet["C8"] = "점검 필요"
+        sheet["D8"] = status_summary["점검 필요"]
+        sheet["E8"] = "교체 검토"
+        sheet["F8"] = status_summary["교체 검토"]
+        sheet["E9"] = "설치장소"
+        sheet["F9"] = "수량"
+
+        for cell_ref in ["A5", "C5", "E5", "A8", "C8", "E8", "E9", "F9"]:
+            sheet[cell_ref].font = Font(bold=True, color=TEXT_PRIMARY)
+            sheet[cell_ref].fill = header_fill if cell_ref in {"E9", "F9"} else accent_fill
+            sheet[cell_ref].border = strong_border if cell_ref in {"E9", "F9"} else border
+            sheet[cell_ref].alignment = Alignment(horizontal="center", vertical="center")
+
+        for cell_ref in ["B5", "D5", "F5", "B8", "D8", "F8"]:
+            sheet[cell_ref].font = Font(size=14, bold=True, color=TEXT_PRIMARY)
+            sheet[cell_ref].fill = surface_fill
+            sheet[cell_ref].border = border
+            sheet[cell_ref].alignment = Alignment(horizontal="center", vertical="center")
+
+        sheet["B8"].fill = PatternFill(fill_type="solid", fgColor=SUCCESS_SOFT)
+        sheet["B8"].font = Font(size=14, bold=True, color=SUCCESS)
+        sheet["D8"].fill = PatternFill(fill_type="solid", fgColor=WARNING_SOFT)
+        sheet["D8"].font = Font(size=14, bold=True, color=WARNING)
+        sheet["F8"].fill = PatternFill(fill_type="solid", fgColor=DANGER_SOFT)
+        sheet["F8"].font = Font(size=14, bold=True, color=DANGER)
+
+        for row_index, (location, count) in enumerate(location_rows, start=10):
+            location_cell = sheet.cell(row=row_index, column=5, value=location)
+            count_cell = sheet.cell(row=row_index, column=6, value=count)
+            for cell in [location_cell, count_cell]:
+                cell.border = border
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.fill = surface_fill
+                cell.font = Font(color=TEXT_PRIMARY)
+
+        for column_letter, width in {
+            "A": 16,
+            "B": 12,
+            "C": 16,
+            "D": 12,
+            "E": 18,
+            "F": 14,
+            "H": 4,
+            "I": 12,
+            "J": 12,
+            "K": 12,
+            "L": 12,
+        }.items():
+            sheet.column_dimensions[column_letter].width = width
+
+        sheet.row_dimensions[1].height = 28
+        sheet.row_dimensions[2].height = 22
+
+        if location_rows:
+            chart = BarChart()
+            chart.type = "bar"
+            chart.style = 2
+            chart.title = "설치장소별 장비 수"
+            chart.y_axis.title = "설치장소"
+            chart.x_axis.title = "수량"
+            chart.legend = None
+            data = Reference(sheet, min_col=6, min_row=9, max_row=9 + len(location_rows))
+            labels = Reference(sheet, min_col=5, min_row=10, max_row=9 + len(location_rows))
+            chart.add_data(data, titles_from_data=True)
+            chart.set_categories(labels)
+            chart.varyColors = False
+            if chart.series:
+                chart.series[0].graphicalProperties.solidFill = ACCENT_PRIMARY
+                chart.series[0].graphicalProperties.line.solidFill = ACCENT_PRIMARY
+            chart.height = 7
+            chart.width = 11
+            sheet.add_chart(chart, "H9")
+
+    def _write_full_inventory_sheet(self, sheet, devices: list[dict]) -> None:
+        self._write_inventory_table(sheet, devices, start_row=1)
+        sheet.freeze_panes = "A2"
+        self._apply_inventory_column_widths(sheet)
+
+    def _write_location_inventory_sheet(self, sheet, title: str, devices: list[dict]) -> None:
+        title_fill = PatternFill(fill_type="solid", fgColor=ACCENT_SOFT)
+        meta_fill = PatternFill(fill_type="solid", fgColor=BG_SUBTLE)
+        border = self._build_thin_border()
+        strong_border = self._build_strong_border()
+
+        sheet["A1"] = title
+        sheet["A2"] = "장비 수"
+        sheet["B2"] = len(devices)
+        sheet["D2"] = "생성일"
+        sheet["E2"] = _today().isoformat()
+
+        sheet["A1"].font = Font(size=16, bold=True, color=ACCENT_PRIMARY)
+        sheet["A1"].fill = title_fill
+        sheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+        sheet["A1"].border = strong_border
+
+        for cell_ref in ["A2", "B2", "D2", "E2"]:
+            sheet[cell_ref].border = border
+            sheet[cell_ref].alignment = Alignment(horizontal="center", vertical="center")
+            sheet[cell_ref].fill = PatternFill(fill_type="solid", fgColor=BG_SURFACE)
+        for cell_ref in ["A2", "D2"]:
+            sheet[cell_ref].font = Font(bold=True, color=TEXT_PRIMARY)
+            sheet[cell_ref].fill = meta_fill
+
+        self._write_inventory_table(sheet, devices, start_row=4)
+        sheet.freeze_panes = "A5"
+        self._apply_inventory_column_widths(sheet)
+
+    def _write_inventory_table(self, sheet, devices: list[dict], *, start_row: int = 1) -> None:
+        headers = self.csv_headers
+        for column_index, title in enumerate(headers, start=1):
+            sheet.cell(row=start_row, column=column_index, value=title)
+
+        for row_offset, device in enumerate(devices, start=1):
+            row = [self._device_to_csv_row(device).get(header, "") for header in headers]
+            for column_index, value in enumerate(row, start=1):
+                sheet.cell(row=start_row + row_offset, column=column_index, value=value)
+
+        end_row = start_row + max(len(devices), 0)
+        self._apply_inventory_table_style(sheet, start_row=start_row, end_row=end_row)
+
+    def _apply_inventory_table_style(self, sheet, *, start_row: int, end_row: int) -> None:
+        header_fill = PatternFill(fill_type="solid", fgColor=BG_SUBTLE)
+        zebra_fill = PatternFill(fill_type="solid", fgColor=BG_PAGE)
+        thin_border = self._build_thin_border()
+        strong_border = self._build_strong_border()
+        usage_years_col = self.csv_headers.index("사용연수") + 1
+        status_col = self.csv_headers.index("상태") + 1
+
+        for column_index in range(1, len(self.csv_headers) + 1):
+            cell = sheet.cell(row=start_row, column=column_index)
+            cell.font = Font(bold=True, color=TEXT_PRIMARY)
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = strong_border
+
+        for row_index in range(start_row + 1, end_row + 1):
+            for column_index in range(1, len(self.csv_headers) + 1):
+                cell = sheet.cell(row=row_index, column=column_index)
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                cell.border = thin_border
+                cell.font = Font(color=TEXT_PRIMARY)
+                if (row_index - start_row) % 2 == 0:
+                    cell.fill = zebra_fill
+
+            usage_cell = sheet.cell(row=row_index, column=usage_years_col)
+            try:
+                usage_years = int(usage_cell.value)
+            except (TypeError, ValueError):
+                usage_years = None
+            if usage_years is not None and usage_years >= EXPECTED_LIFE_CYCLE_YEARS:
+                usage_cell.fill = PatternFill(fill_type="solid", fgColor=WARNING_SOFT)
+                usage_cell.font = Font(bold=True, color=WARNING)
+
+            status_cell = sheet.cell(row=row_index, column=status_col)
+            status_value = str(status_cell.value or "").strip()
+            if status_value == "정상 사용":
+                status_cell.fill = PatternFill(fill_type="solid", fgColor=SUCCESS_SOFT)
+                status_cell.font = Font(bold=True, color=SUCCESS)
+            elif status_value in {"수리중", "점검 필요", "점검중"}:
+                status_cell.fill = PatternFill(fill_type="solid", fgColor=WARNING_SOFT)
+                status_cell.font = Font(bold=True, color=WARNING)
+            elif status_value:
+                status_cell.fill = PatternFill(fill_type="solid", fgColor=DANGER_SOFT)
+                status_cell.font = Font(bold=True, color=DANGER)
+
+        sheet.auto_filter.ref = f"A{start_row}:{get_column_letter(len(self.csv_headers))}{end_row}"
+
+    def _apply_inventory_column_widths(self, sheet) -> None:
+        widths = {
+            "A": 14,
+            "B": 12,
+            "C": 18,
+            "D": 12,
+            "E": 14,
+            "F": 22,
+            "G": 18,
+            "H": 12,
+            "I": 10,
+            "J": 12,
+            "K": 10,
+            "L": 12,
+            "M": 28,
+            "N": 14,
+            "O": 18,
+        }
+        for column_letter, width in widths.items():
+            sheet.column_dimensions[column_letter].width = width
+
+    def _build_thin_border(self) -> Border:
+        return Border(
+            left=Side(style="thin", color=LINE_DEFAULT),
+            right=Side(style="thin", color=LINE_DEFAULT),
+            top=Side(style="thin", color=LINE_DEFAULT),
+            bottom=Side(style="thin", color=LINE_DEFAULT),
+        )
+
+    def _build_strong_border(self) -> Border:
+        return Border(
+            left=Side(style="thin", color=LINE_STRONG),
+            right=Side(style="thin", color=LINE_STRONG),
+            top=Side(style="thin", color=LINE_STRONG),
+            bottom=Side(style="thin", color=LINE_STRONG),
+        )
 
     def _build_device_record(self, payload: dict) -> dict:
         management_no = self._normalize_text(payload.get("management_no"))
