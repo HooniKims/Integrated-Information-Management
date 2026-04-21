@@ -715,7 +715,7 @@ function renderResults(results) {
           <td><span class="status ${statusClassFromValue(item.status)}">${statusLabelFromValue(item.status)}</span></td>
           <td>
             <div class="primary-cell">
-              <strong>${escapeHtml(item.hostname || "이름 미해결")}</strong>
+              <strong>${escapeHtml(scanResultDisplayName(item))}</strong>
               <span class="secondary-line">${item.reachable ? "응답 있음" : "응답 없음"}</span>
             </div>
           </td>
@@ -750,7 +750,7 @@ function renderResults(results) {
 function selectResult(result) {
   state.selectedResult = result;
   elements.copySelectedButton.disabled = false;
-  elements.detailDeviceName.textContent = result.hostname || "이름 미해결 장치";
+  elements.detailDeviceName.textContent = scanResultDisplayName(result, " 장치");
   elements.detailStatus.textContent = statusLabelFromValue(result.status);
   elements.detailStatus.className = `status ${statusClassFromValue(result.status)}`;
   elements.detailSummary.textContent = result.note;
@@ -763,6 +763,14 @@ function selectResult(result) {
   elements.detailNote.textContent = result.reachable
     ? "장치가 응답했습니다. 이름과 MAC 정보는 네트워크 환경에 따라 일부 비어 있을 수 있습니다."
     : "응답이 없었습니다. 장치 전원, 방화벽, ping 차단 여부를 함께 확인하십시오.";
+}
+
+function scanResultDisplayName(result, suffix = "") {
+  if (!result.reachable) {
+    return `응답 없음${suffix}`;
+  }
+
+  return result.hostname || `이름 미해결${suffix}`;
 }
 
 function resetDetailPanel() {
@@ -1111,7 +1119,7 @@ function renderSiteAccounts() {
           <td>${urlCell}</td>
           <td><span class="mono">${escapeHtml(item.username || "-")}</span></td>
           <td><span class="password-badge">${escapeHtml(item.password || "-")}</span></td>
-          <td class="wrap-cell">${escapeHtml(item.note || "-")}</td>
+          <td class="wrap-cell site-account-note-cell">${escapeHtml(item.note || "-")}</td>
         </tr>
       `;
     })

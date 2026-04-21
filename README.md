@@ -14,14 +14,25 @@
 
 ## 실행 방법
 
+### 실행 전 준비
+
+1. Windows에 Python 3 를 설치합니다.
+2. 이 폴더에서 아래 명령으로 필요한 패키지를 설치합니다.
+
+```powershell
+py -3 -m pip install -r requirements.txt
+```
+
+`python` 명령이 바로 동작하지 않는 PC에서는 `py -3` 를 사용하면 됩니다.
+
 ### Windows 바로 실행
 
-`run-ip-scan-webapp.bat` 를 실행합니다.
+`run-ip-scan-webapp.bat` 를 실행합니다. 서버가 실제로 준비된 뒤 브라우저가 열립니다.
 
 ### 직접 실행
 
 ```powershell
-python server.py
+py -3 server.py
 ```
 
 실행 후 브라우저 접속 주소:

@@ -2,5 +2,7 @@ __pycache__/
 *.py[cod]
 .server.err.log
 .server.out.log
+.run/
+.venv/
 Thumbs.db
 .DS_Store

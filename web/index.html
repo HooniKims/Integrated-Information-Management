@@ -241,15 +241,6 @@
             </div>
           </section>
 
-          <section class="alert-bar">
-            <div class="alert-copy">
-              <span class="alert-label">Site Accounts</span>
-              <span class="alert-title">자주 쓰는 내부 사이트 계정을 한 화면에서 바로 수정합니다.</span>
-              <span class="alert-meta">URL은 아이콘 버튼으로 열 수 있고, 표와 상세 패널 모두 최신 저장값을 그대로 보여줍니다.</span>
-            </div>
-            <button class="secondary-button" type="button" id="refreshAccountsButton">목록 새로고침</button>
-          </section>
-
           <section class="search-panel">
             <div class="account-toolbar">
               <label class="search-input account-search-input">
@@ -266,8 +257,6 @@
               <button class="filter-chip" type="button" data-account-filter="missing-description">설명 미입력</button>
               <button class="filter-chip" type="button" data-account-filter="missing-password">비밀번호 없음</button>
             </div>
-
-            <div class="account-feedback" id="accountFeedbackText">사이트 계정 목록을 불러오는 중입니다.</div>
           </section>
 
           <section class="stats-grid" aria-label="site account summary">
@@ -293,15 +282,19 @@
             </article>
           </section>
 
-          <section class="workspace split-workspace">
-            <div class="panel">
+          <section class="workspace split-workspace account-workspace">
+            <div class="panel account-list-panel">
               <div class="panel-header">
                 <div class="panel-title-wrap">
                   <h2 class="panel-title">사이트 계정 목록</h2>
                   <span class="panel-subtitle" id="siteAccountResultMeta">정렬: 사이트명 오름차순</span>
                 </div>
+                <div class="panel-header-actions">
+                  <div class="account-feedback" id="accountFeedbackText" aria-live="polite">사이트 계정 목록을 불러오는 중입니다.</div>
+                  <button class="secondary-button" type="button" id="refreshAccountsButton">목록 새로고침</button>
+                </div>
               </div>
-              <div class="panel-body">
+              <div class="panel-body account-list-body">
                 <table class="site-account-table">
                   <thead>
                     <tr>
@@ -336,7 +329,7 @@
                 </div>
 
                 <div class="detail-meta">
-                  <div class="detail-grid">
+                  <div class="detail-grid account-detail-grid">
                     <div class="detail-item">
                       <span class="detail-item-label">URL</span>
                       <span class="detail-item-value wrap-text" id="accountDetailUrl">-</span>

@@ -162,6 +162,12 @@ textarea {
   padding: 1.25rem 1rem 1rem;
   border-right: 1px solid var(--line-default);
   background: var(--bg-surface);
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .brand-block {
@@ -697,6 +703,10 @@ button:disabled {
   grid-template-columns: minmax(0, 1.45fr) minmax(22rem, 0.9fr);
 }
 
+.account-workspace {
+  grid-template-columns: minmax(0, 1.94fr) minmax(18.25rem, 0.62fr);
+}
+
 .inventory-workspace {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -751,7 +761,62 @@ table {
 }
 
 .site-account-table {
-  min-width: 58rem;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.account-list-body {
+  overflow-x: hidden;
+}
+
+.site-account-table th,
+.site-account-table td {
+  padding-inline: 0.72rem;
+}
+
+.site-account-table th:nth-child(1),
+.site-account-table td:nth-child(1) {
+  width: 16%;
+}
+
+.site-account-table th:nth-child(2),
+.site-account-table td:nth-child(2) {
+  width: 20%;
+}
+
+.site-account-table th:nth-child(3),
+.site-account-table td:nth-child(3) {
+  width: 4.25rem;
+  text-align: center;
+}
+
+.site-account-table th:nth-child(4),
+.site-account-table td:nth-child(4) {
+  width: 18%;
+}
+
+.site-account-table th:nth-child(5),
+.site-account-table td:nth-child(5) {
+  width: 16%;
+}
+
+.site-account-table th:nth-child(6),
+.site-account-table td:nth-child(6) {
+  width: auto;
+}
+
+.site-account-table td:nth-child(1) strong,
+.site-account-table td:nth-child(4) .mono,
+.site-account-table td:nth-child(5) .password-badge {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.site-account-note-cell {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .device-table {
@@ -828,6 +893,7 @@ tbody tr.selected {
   display: inline-flex;
   align-items: center;
   min-height: 2rem;
+  white-space: normal;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
   background: var(--bg-subtle);
@@ -837,7 +903,7 @@ tbody tr.selected {
   font-weight: 700;
   max-width: 100%;
   overflow-wrap: anywhere;
-  word-break: break-all;
+  word-break: normal;
 }
 
 .primary-cell strong {
@@ -1031,6 +1097,10 @@ tbody tr.selected {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.account-detail-grid {
+  grid-template-columns: 1fr;
 }
 
 .detail-grid-wide {
@@ -1398,6 +1468,9 @@ tbody tr.selected {
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line-default);
+    position: static;
+    height: auto;
+    overflow: visible;
   }
 
   .nav-group {
