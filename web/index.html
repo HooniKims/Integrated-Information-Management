@@ -82,7 +82,6 @@
       </div>
 
       <div class="sidebar-footer" id="sidebarFooterText">
-        <strong>현재 초점</strong><br />
         시작 IP와 끝 IP를 입력해서 범위를 스캔합니다.
       </div>
     </aside>
@@ -201,7 +200,7 @@
                   <h2 class="panel-title">스캔 결과</h2>
                   <span class="panel-subtitle">응답 상태와 이름 해석 결과를 범위 단위로 확인합니다. 항상 IP 오름차순으로 표시됩니다.</span>
                 </div>
-                <button class="secondary-button" type="button" id="copyJsonButton">결과 JSON 복사</button>
+                <button class="secondary-button" type="button" id="copyJsonButton">결과 CSV 다운</button>
               </div>
               <div class="panel-body">
                 <table class="scan-table">
@@ -263,10 +262,6 @@
                     <span class="detail-item-label">마지막 보고</span>
                     <span class="detail-item-value" id="detailReportedAt">-</span>
                   </div>
-                </div>
-
-                <div class="note-box" id="detailNote">
-                  범위 스캔 결과는 ping, reverse DNS, NetBIOS, ARP 정보에 따라 다르게 보일 수 있습니다.
                 </div>
 
                 <div class="detail-actions">
@@ -544,7 +539,7 @@
                 <table class="device-table">
                   <thead>
                     <tr>
-                      <th>관리번호</th>
+                      <th>연번</th>
                       <th>설치장소</th>
                       <th>형태</th>
                       <th>제조회사</th>

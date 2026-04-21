@@ -1144,7 +1144,8 @@ tbody tr.selected {
 
 .device-table th:nth-child(1),
 .device-table td:nth-child(1) {
-  width: 8.25rem;
+  width: 3.5rem;
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -1155,12 +1156,17 @@ tbody tr.selected {
 }
 
 .device-table th:nth-child(7),
-.device-table td:nth-child(7),
+.device-table td:nth-child(7) {
+  width: 8rem;
+  text-align: left;
+  white-space: normal;
+}
+
 .device-table th:nth-child(8),
 .device-table td:nth-child(8) {
-  width: 4.9rem;
+  width: 4.6rem;
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .device-table th:nth-child(9),
@@ -1184,6 +1190,18 @@ tbody tr.selected {
 
 .device-table td:nth-child(11) .status {
   margin-inline: auto;
+}
+
+.device-sequence-cell {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.device-cpu-cell,
+.device-ram-cell {
+  line-break: auto;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .device-table th:nth-child(13),

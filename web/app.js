@@ -128,7 +128,6 @@ const elements = {
   detailMac: document.getElementById("detailMac"),
   detailLatency: document.getElementById("detailLatency"),
   detailReportedAt: document.getElementById("detailReportedAt"),
-  detailNote: document.getElementById("detailNote"),
   resultSearchInput: document.getElementById("resultSearchInput"),
   resultMetaText: document.getElementById("resultMetaText"),
   filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
@@ -565,6 +564,32 @@ function toDeviceCsv(items) {
   return rows.map((row) => row.map(buildCsvValue).join(",")).join("\n");
 }
 
+function toScanResultsCsv(items) {
+  const rows = [[
+    "IP",
+    "상태",
+    "장치명",
+    "응답여부",
+    "이름 출처",
+    "MAC",
+    "응답 시간(ms)",
+    "메모",
+    "마지막 보고",
+  ], ...items.map((item) => [
+    item.ip,
+    statusLabelFromValue(item.status),
+    scanResultDisplayName(item),
+    item.reachable ? "응답 있음" : "응답 없음",
+    item.hostname_source || "",
+    item.mac_address || "",
+    item.latency_ms != null ? String(item.latency_ms) : "",
+    item.note || "",
+    formatTime(item.reported_at),
+  ])];
+
+  return rows.map((row) => row.map(buildCsvValue).join(",")).join("\n");
+}
+
 function downloadTextFile(filename, text, mimeType = "text/plain;charset=utf-8") {
   const blob = new Blob([text], { type: mimeType });
   downloadBlob(filename, blob);
@@ -595,7 +620,7 @@ function setTopbarForView(view) {
   elements.activeModuleLabel.textContent = meta.label;
   elements.topbarContextLabel.textContent = meta.contextLabel;
   elements.topbarContextValue.textContent = meta.contextValue();
-  elements.sidebarFooterText.innerHTML = `<strong>현재 초점</strong><br />${escapeHtml(meta.sidebar)}`;
+  elements.sidebarFooterText.textContent = meta.sidebar;
 }
 
 function setLoginFooterYear() {
@@ -870,9 +895,6 @@ function selectResult(result) {
   elements.detailMac.textContent = result.mac_address || "-";
   elements.detailLatency.textContent = result.latency_ms != null ? `${result.latency_ms} ms` : "-";
   elements.detailReportedAt.textContent = formatTime(result.reported_at);
-  elements.detailNote.textContent = result.reachable
-    ? "장치가 응답했습니다. 이름과 MAC 정보는 네트워크 환경에 따라 일부 비어 있을 수 있습니다."
-    : "응답이 없었습니다. 장치 전원, 방화벽, ping 차단 여부를 함께 확인하십시오.";
 }
 
 function scanResultDisplayName(result, suffix = "") {
@@ -896,7 +918,6 @@ function resetDetailPanel() {
   elements.detailMac.textContent = "-";
   elements.detailLatency.textContent = "-";
   elements.detailReportedAt.textContent = "-";
-  elements.detailNote.textContent = "범위 스캔 결과는 ping, reverse DNS, NetBIOS, ARP 정보에 따라 다르게 보일 수 있습니다.";
 }
 
 async function fetchJson(url, options = {}) {
@@ -1106,11 +1127,18 @@ function clearResults() {
 }
 
 async function copyAllResults() {
+  if (!state.currentResults.length) {
+    elements.progressText.textContent = "다운로드할 스캔 결과가 없습니다.";
+    return;
+  }
+
   try {
-    await copyTextToClipboard(JSON.stringify(state.currentResults, null, 2));
-    elements.progressText.textContent = "현재 필터 기준 결과를 클립보드에 복사했습니다.";
+    const csvText = toScanResultsCsv(state.currentResults);
+    const filename = `ip_scan_results_${new Date().toISOString().slice(0, 10)}.csv`;
+    downloadTextFile(filename, `\uFEFF${csvText}`, "text/csv;charset=utf-8");
+    elements.progressText.textContent = "현재 필터 기준 결과를 CSV로 다운로드했습니다.";
   } catch {
-    elements.progressText.textContent = "클립보드 복사에 실패했습니다.";
+    elements.progressText.textContent = "CSV 다운로드에 실패했습니다.";
   }
 }
 
@@ -1749,7 +1777,7 @@ function renderSelectedDevice() {
 
 function renderDeviceInventory() {
   const filtered = applyDeviceFilter(state.deviceInventory);
-  elements.deviceResultMeta.textContent = `정렬: 관리번호 오름차순 / 현재 ${filtered.length}건`;
+  elements.deviceResultMeta.textContent = `정렬: 관리번호 기준 / 현재 ${filtered.length}건`;
 
   const selectedInFiltered = filtered.find((item) => item.id === state.selectedDeviceId);
   if (!selectedInFiltered) {
@@ -1767,7 +1795,7 @@ function renderDeviceInventory() {
   }
 
   elements.deviceInventoryTableBody.innerHTML = filtered
-    .map((item) => {
+    .map((item, index) => {
       const status = deviceStatusLabel(item.status);
       const statusClassName = deviceStatusClass(item.status);
       const imageButton = item.image_url
@@ -1775,14 +1803,14 @@ function renderDeviceInventory() {
         : '<span class="muted-inline">없음</span>';
       return `
         <tr data-device-id="${escapeHtml(item.id)}" class="${item.id === state.selectedDeviceId ? "selected" : ""}">
-          <td class="mono">${escapeHtml(item.management_no || "-")}</td>
+          <td class="device-sequence-cell">${index + 1}</td>
           <td class="wrap-cell">${escapeHtml(item.location || "-")}</td>
           <td class="wrap-cell">${escapeHtml(item.device_type || "-")}</td>
           <td class="wrap-cell">${escapeHtml(item.manufacturer || "-")}</td>
           <td class="wrap-cell">${escapeHtml(item.model_name || "-")}</td>
           <td class="mono wrap-cell">${escapeHtml(item.serial_number || "-")}</td>
-          <td class="wrap-cell">${escapeHtml(item.cpu || "-")}</td>
-          <td class="wrap-cell">${escapeHtml(item.ram || "-")}</td>
+          <td class="wrap-cell device-cpu-cell">${escapeHtml(item.cpu || "-")}</td>
+          <td class="wrap-cell device-ram-cell">${escapeHtml(item.ram || "-")}</td>
           <td>${escapeHtml(formatDeviceMonth(item.acquired_at))}</td>
           <td>${escapeHtml(formatDeviceAge(item))}</td>
           <td><span class="status ${statusClassName}">${escapeHtml(status)}</span></td>

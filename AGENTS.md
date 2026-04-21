@@ -49,8 +49,18 @@
 
 ### Aesthetic Direction
 - Use a bright light theme with IBM-style enterprise order and Airtable-style table readability.
-- Favor Pretendard-centered Korean readability, white surfaces, soft gray structure, and navy accents.
+- Favor Paperlogy-centered Korean readability, white surfaces, soft gray structure, and navy accents.
 - Avoid hero-banner layouts, excessive card decoration, purple AI-style palettes, and flashy gradients or glassmorphism.
+
+### Accessibility & Readability
+- Target practical internal-tool accessibility with WCAG AA-level readability as the baseline.
+- Keep body text at 14px or larger and supporting text at 13px or larger.
+- Never rely on color alone for state; always pair status colors with labels.
+- Keep keyboard tab navigation and visible focus states intact for buttons and inputs.
+- Avoid excessive motion and reduce animation when it risks clarity.
+- If applying these rules causes layout breakage, adjust the layout rather than weakening readability.
+- Aim to avoid horizontal scrolling on the default screen.
+- Respect Korean reading flow with natural wrapping and spacing rather than awkward word breaks.
 
 ### Design Principles
 - Put search and status checking at the top of each important screen.
@@ -58,3 +68,4 @@
 - Make Korean copy short, naturally wrapped, and easy to scan.
 - Show risk states immediately through both labels and color.
 - Prioritize alignment, spacing, hierarchy, and repeatable patterns over visual effects.
+- Keep the default screen usable without horizontal scrolling; on narrower widths, reflow the layout while preserving information priority.
