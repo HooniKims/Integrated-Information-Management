@@ -97,6 +97,24 @@ class AppHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/site-accounts/template-csv":
+            self._send_json(
+                {
+                    "filename": "site_accounts_template.csv",
+                    "csv_text": SITE_ACCOUNT_REPOSITORY.export_csv(include_items=False),
+                }
+            )
+            return
+
+        if path == "/api/site-accounts/export-csv":
+            self._send_json(
+                {
+                    "filename": "site_accounts.csv",
+                    "csv_text": SITE_ACCOUNT_REPOSITORY.export_csv(),
+                }
+            )
+            return
+
         if path == "/api/device-inventory":
             filters = {
                 "q": query.get("q", [""])[0],
@@ -111,6 +129,15 @@ class AppHandler(BaseHTTPRequestHandler):
                 {
                     "items": DEVICE_INVENTORY_REPOSITORY.list_devices(filters),
                     "summary": DEVICE_INVENTORY_REPOSITORY.summarize_devices(filters),
+                }
+            )
+            return
+
+        if path == "/api/device-inventory/template-csv":
+            self._send_json(
+                {
+                    "filename": "device_inventory_template.csv",
+                    "csv_text": DEVICE_INVENTORY_REPOSITORY.export_csv_template(),
                 }
             )
             return
@@ -219,6 +246,20 @@ class AppHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
                 return
             self._send_json(created, status=HTTPStatus.CREATED)
+            return
+
+        if path == "/api/site-accounts/import-csv":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_json({"error": "Invalid JSON body."}, status=HTTPStatus.BAD_REQUEST)
+                return
+            csv_text = str(payload.get("csv_text", "") or "")
+            try:
+                result = SITE_ACCOUNT_REPOSITORY.import_csv(csv_text)
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                return
+            self._send_json(result)
             return
 
         if path == "/api/device-inventory":
@@ -373,6 +414,8 @@ class AppHandler(BaseHTTPRequestHandler):
             return
 
         content_type, _ = mimetypes.guess_type(str(target))
+        if target.suffix.lower() == ".ttf":
+            content_type = "font/ttf"
         if content_type in {"text/html", "text/css", "application/javascript", "text/javascript", "application/x-javascript", "image/svg+xml"}:
             content_type = f"{content_type}; charset=utf-8"
         data = target.read_bytes()

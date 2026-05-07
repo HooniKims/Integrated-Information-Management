@@ -291,7 +291,18 @@
                 <strong>검색</strong>
                 <input type="text" id="siteAccountSearchInput" placeholder="사이트, 설명, URL, ID, 비고 검색" aria-label="사이트 계정 검색" />
               </label>
-              <button class="primary-button" type="button" id="newAccountButton">새 항목 추가</button>
+              <div class="inventory-action-group">
+                <button class="primary-button" type="button" id="newAccountButton">새 항목 추가</button>
+                <div class="csv-menu" id="accountCsvMenu">
+                  <button class="secondary-button" type="button" id="accountCsvButton" aria-expanded="false" aria-controls="accountCsvPanel">CSV 업로드</button>
+                  <div class="csv-menu-panel is-hidden" id="accountCsvPanel">
+                    <button class="secondary-button" type="button" id="accountCsvExportButton">전체 다운</button>
+                    <button class="secondary-button" type="button" id="accountCsvTemplateButton">양식 다운로드</button>
+                    <button class="primary-button" type="button" id="accountCsvUploadButton">파일 선택</button>
+                  </div>
+                </div>
+                <input type="file" id="accountImportInput" accept=".csv,text/csv" class="is-visually-hidden" />
+              </div>
             </div>
 
             <div class="filter-row">
@@ -335,6 +346,8 @@
                 </div>
                 <div class="panel-header-actions">
                   <div class="account-feedback" id="accountFeedbackText" aria-live="polite">사이트 계정 목록을 불러오는 중입니다.</div>
+                  <span class="selection-count" id="accountSelectionCount">선택 0건</span>
+                  <button class="ghost-button danger-button" type="button" id="deleteSelectedAccountsButton" disabled>선택 삭제</button>
                   <button class="secondary-button" type="button" id="refreshAccountsButton">목록 새로고침</button>
                 </div>
               </div>
@@ -342,6 +355,9 @@
                 <table class="site-account-table">
                   <thead>
                     <tr>
+                      <th class="select-column">
+                        <input type="checkbox" id="selectAllAccountsCheckbox" aria-label="현재 사이트 계정 목록 전체 선택" />
+                      </th>
                       <th>사이트</th>
                       <th>설명</th>
                       <th>URL</th>
@@ -352,7 +368,7 @@
                   </thead>
                   <tbody id="siteAccountsTableBody">
                     <tr>
-                      <td colspan="6" class="empty-cell">저장된 사이트 계정이 아직 없습니다.</td>
+                      <td colspan="7" class="empty-cell">저장된 사이트 계정이 아직 없습니다.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -480,7 +496,14 @@
               </label>
               <div class="inventory-action-group">
                 <button class="primary-button" type="button" id="newDeviceButton">새 장비 추가</button>
-                <button class="secondary-button" type="button" id="deviceImportButton">CSV 가져오기</button>
+                <div class="csv-menu" id="deviceCsvMenu">
+                  <button class="secondary-button" type="button" id="deviceImportButton" aria-expanded="false" aria-controls="deviceCsvPanel">CSV 업로드</button>
+                  <div class="csv-menu-panel is-hidden" id="deviceCsvPanel">
+                    <button class="secondary-button" type="button" id="deviceCsvExportButton">전체 다운</button>
+                    <button class="secondary-button" type="button" id="deviceCsvTemplateButton">양식 다운로드</button>
+                    <button class="primary-button" type="button" id="deviceCsvUploadButton">파일 선택</button>
+                  </div>
+                </div>
                 <button class="secondary-button" type="button" id="deviceReportButton">보고서 다운</button>
                 <input type="file" id="deviceImportInput" accept=".csv,text/csv" class="is-visually-hidden" />
               </div>
@@ -532,6 +555,8 @@
                 </div>
                 <div class="panel-header-actions">
                   <div class="account-feedback is-hidden" id="deviceFeedbackText" aria-live="polite"></div>
+                  <span class="selection-count" id="deviceSelectionCount">선택 0건</span>
+                  <button class="ghost-button danger-button" type="button" id="deleteSelectedDevicesButton" disabled>선택 삭제</button>
                   <button class="secondary-button" type="button" id="refreshDevicesButton">목록 새로고침</button>
                 </div>
               </div>
@@ -539,6 +564,9 @@
                 <table class="device-table">
                   <thead>
                     <tr>
+                      <th class="select-column">
+                        <input type="checkbox" id="selectAllDevicesCheckbox" aria-label="현재 기기 목록 전체 선택" />
+                      </th>
                       <th>연번</th>
                       <th>설치장소</th>
                       <th>형태</th>
@@ -557,7 +585,7 @@
                   </thead>
                   <tbody id="deviceInventoryTableBody">
                     <tr>
-                      <td colspan="14" class="empty-cell">저장된 기기 정보가 아직 없습니다.</td>
+                      <td colspan="15" class="empty-cell">저장된 기기 정보가 아직 없습니다.</td>
                     </tr>
                   </tbody>
                 </table>

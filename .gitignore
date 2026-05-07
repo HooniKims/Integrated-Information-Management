@@ -2,9 +2,12 @@ __pycache__/
 *.py[cod]
 .server.err.log
 .server.out.log
+server.err.log
+server.log
 .run/
 .venv/
 .env
+data/*.json
 Thumbs.db
 .DS_Store
 .gstack/

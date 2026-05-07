@@ -15,6 +15,7 @@ const state = {
   siteAccountFilter: "all",
   siteAccountSearchQuery: "",
   selectedAccountId: null,
+  selectedAccountIds: new Set(),
   accountEditorMode: "detail",
   siteAccountsLoaded: false,
   accountCopyStatus: {},
@@ -22,6 +23,7 @@ const state = {
   deviceInventoryFilter: "all",
   deviceInventorySearchQuery: "",
   selectedDeviceId: null,
+  selectedDeviceIds: new Set(),
   deviceEditorMode: "detail",
   deviceMetadata: null,
   deviceEvents: [],
@@ -136,8 +138,18 @@ const elements = {
   refreshAccountsButton: document.getElementById("refreshAccountsButton"),
   siteAccountSearchInput: document.getElementById("siteAccountSearchInput"),
   newAccountButton: document.getElementById("newAccountButton"),
+  accountCsvMenu: document.getElementById("accountCsvMenu"),
+  accountCsvButton: document.getElementById("accountCsvButton"),
+  accountCsvPanel: document.getElementById("accountCsvPanel"),
+  accountCsvExportButton: document.getElementById("accountCsvExportButton"),
+  accountCsvTemplateButton: document.getElementById("accountCsvTemplateButton"),
+  accountCsvUploadButton: document.getElementById("accountCsvUploadButton"),
+  accountImportInput: document.getElementById("accountImportInput"),
   accountFilterButtons: Array.from(document.querySelectorAll("[data-account-filter]")),
   accountFeedbackText: document.getElementById("accountFeedbackText"),
+  accountSelectionCount: document.getElementById("accountSelectionCount"),
+  deleteSelectedAccountsButton: document.getElementById("deleteSelectedAccountsButton"),
+  selectAllAccountsCheckbox: document.getElementById("selectAllAccountsCheckbox"),
   accountTotalValue: document.getElementById("accountTotalValue"),
   accountUrlValue: document.getElementById("accountUrlValue"),
   accountMissingDescriptionValue: document.getElementById("accountMissingDescriptionValue"),
@@ -175,10 +187,18 @@ const elements = {
   refreshDevicesButton: document.getElementById("refreshDevicesButton"),
   deviceSearchInput: document.getElementById("deviceSearchInput"),
   newDeviceButton: document.getElementById("newDeviceButton"),
+  deviceCsvMenu: document.getElementById("deviceCsvMenu"),
   deviceImportButton: document.getElementById("deviceImportButton"),
+  deviceCsvPanel: document.getElementById("deviceCsvPanel"),
+  deviceCsvExportButton: document.getElementById("deviceCsvExportButton"),
+  deviceCsvTemplateButton: document.getElementById("deviceCsvTemplateButton"),
+  deviceCsvUploadButton: document.getElementById("deviceCsvUploadButton"),
   deviceReportButton: document.getElementById("deviceReportButton"),
   deviceImportInput: document.getElementById("deviceImportInput"),
   deviceFeedbackText: document.getElementById("deviceFeedbackText"),
+  deviceSelectionCount: document.getElementById("deviceSelectionCount"),
+  deleteSelectedDevicesButton: document.getElementById("deleteSelectedDevicesButton"),
+  selectAllDevicesCheckbox: document.getElementById("selectAllDevicesCheckbox"),
   deviceFilterButtons: Array.from(document.querySelectorAll("[data-device-filter]")),
   deviceTotalValue: document.getElementById("deviceTotalValue"),
   deviceNormalValue: document.getElementById("deviceNormalValue"),
@@ -258,6 +278,8 @@ const DEFAULT_DEVICE_METADATA = {
     { value: "점검중", label: "점검중" },
     { value: "수리중", label: "수리중" },
     { value: "교체 검토", label: "교체 검토" },
+    { value: "불용 예정", label: "불용 예정" },
+    { value: "불용 완료", label: "불용 완료" },
   ],
 };
 
@@ -305,6 +327,10 @@ const DEVICE_STATUS_LABELS = {
   repair: "수리중",
   maintenance: "수리중",
   "교체 검토": "교체 검토",
+  "불용 처리 예정": "불용 예정",
+  "불용 처리 완료": "불용 완료",
+  "불용 예정": "불용 예정",
+  "불용 완료": "불용 완료",
   불용대기: "불용대기",
   폐기: "폐기",
   disposed: "폐기",
@@ -324,6 +350,10 @@ const DEVICE_STATUS_CLASS_MAP = {
   repair: "danger",
   maintenance: "warning",
   "교체 검토": "warning",
+  "불용 처리 예정": "warning",
+  "불용 처리 완료": "danger",
+  "불용 예정": "warning",
+  "불용 완료": "danger",
   불용대기: "danger",
   폐기: "danger",
   disposed: "danger",
@@ -604,6 +634,13 @@ function downloadBlob(filename, blob) {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function downloadCsvFromApi(url, fallbackName) {
+  const response = await fetchJson(url, { headers: {} });
+  const filename = response.filename || fallbackName;
+  const csvText = response.csv_text || "";
+  downloadTextFile(filename, csvText, "text/csv;charset=utf-8");
 }
 
 function escapeHtml(value) {
@@ -1348,12 +1385,61 @@ function applySiteAccountFilter(accounts) {
     });
   }
 
-  next.sort((left, right) => left.site_name.localeCompare(right.site_name, "ko-KR", { sensitivity: "base" }));
+  next.sort((left, right) => {
+    const rightTime = right.updated_at || right.created_at || "";
+    const leftTime = left.updated_at || left.created_at || "";
+    const timeCompare = rightTime.localeCompare(leftTime);
+    if (timeCompare !== 0) {
+      return timeCompare;
+    }
+    return left.site_name.localeCompare(right.site_name, "ko-KR", { sensitivity: "base" });
+  });
   return next;
 }
 
 function getSelectedAccount() {
   return state.siteAccounts.find((item) => item.id === state.selectedAccountId) || null;
+}
+
+function syncAccountSelection(filteredAccounts = applySiteAccountFilter(state.siteAccounts)) {
+  const existingIds = new Set(state.siteAccounts.map((item) => item.id));
+  state.selectedAccountIds = new Set(
+    Array.from(state.selectedAccountIds).filter((id) => existingIds.has(id)),
+  );
+
+  const visibleIds = filteredAccounts.map((item) => item.id);
+  const selectedVisibleCount = visibleIds.filter((id) => state.selectedAccountIds.has(id)).length;
+  const selectedCount = state.selectedAccountIds.size;
+
+  elements.accountSelectionCount.textContent = `선택 ${selectedCount}건`;
+  elements.deleteSelectedAccountsButton.disabled = selectedCount === 0;
+  elements.selectAllAccountsCheckbox.disabled = visibleIds.length === 0;
+  elements.selectAllAccountsCheckbox.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+  elements.selectAllAccountsCheckbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+}
+
+function toggleAccountSelection(accountId, checked) {
+  if (!accountId) {
+    return;
+  }
+
+  if (checked) {
+    state.selectedAccountIds.add(accountId);
+  } else {
+    state.selectedAccountIds.delete(accountId);
+  }
+  renderSiteAccounts();
+}
+
+function toggleAllVisibleAccounts(checked) {
+  applySiteAccountFilter(state.siteAccounts).forEach((item) => {
+    if (checked) {
+      state.selectedAccountIds.add(item.id);
+    } else {
+      state.selectedAccountIds.delete(item.id);
+    }
+  });
+  renderSiteAccounts();
 }
 
 function resetAccountDetail() {
@@ -1418,7 +1504,7 @@ function renderSelectedAccount() {
 
 function renderSiteAccounts() {
   const filtered = applySiteAccountFilter(state.siteAccounts);
-  elements.siteAccountResultMeta.textContent = `정렬: 사이트명 오름차순 / 현재 ${filtered.length}건`;
+  elements.siteAccountResultMeta.textContent = `정렬: 최신 수정순 / 현재 ${filtered.length}건`;
 
   const selectedInFiltered = filtered.find((item) => item.id === state.selectedAccountId);
   if (!selectedInFiltered) {
@@ -1428,9 +1514,10 @@ function renderSiteAccounts() {
   if (filtered.length === 0) {
     elements.siteAccountsTableBody.innerHTML = `
       <tr>
-        <td colspan="6" class="empty-cell">조건에 맞는 사이트 계정이 없습니다.</td>
+        <td colspan="7" class="empty-cell">조건에 맞는 사이트 계정이 없습니다.</td>
       </tr>
     `;
+    syncAccountSelection(filtered);
     renderSelectedAccount();
     return;
   }
@@ -1444,6 +1531,15 @@ function renderSiteAccounts() {
 
       return `
         <tr data-account-id="${item.id}" class="${item.id === state.selectedAccountId ? "selected" : ""}">
+          <td class="select-cell">
+            <input
+              type="checkbox"
+              class="row-select-checkbox"
+              data-account-select="${escapeHtml(item.id)}"
+              aria-label="${escapeHtml(item.site_name)} 선택"
+              ${state.selectedAccountIds.has(item.id) ? "checked" : ""}
+            />
+          </td>
           <td>
             <div class="primary-cell">
               <strong>${escapeHtml(item.site_name)}</strong>
@@ -1460,12 +1556,23 @@ function renderSiteAccounts() {
     })
     .join("");
 
+  syncAccountSelection(filtered);
+
   Array.from(elements.siteAccountsTableBody.querySelectorAll("tr[data-account-id]")).forEach((row) => {
     row.addEventListener("click", () => {
       state.selectedAccountId = row.dataset.accountId;
       state.accountEditorMode = "detail";
       renderSiteAccounts();
       renderSelectedAccount();
+    });
+  });
+
+  Array.from(elements.siteAccountsTableBody.querySelectorAll("[data-account-select]")).forEach((checkbox) => {
+    checkbox.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    checkbox.addEventListener("change", () => {
+      toggleAccountSelection(checkbox.dataset.accountSelect, checkbox.checked);
     });
   });
 
@@ -1591,6 +1698,105 @@ async function deleteSelectedAccount() {
   }
 }
 
+async function deleteSelectedAccounts() {
+  const accountIds = Array.from(state.selectedAccountIds);
+  if (!accountIds.length) {
+    return;
+  }
+
+  const confirmed = window.confirm(`선택한 사이트 계정 ${accountIds.length}건을 삭제하시겠습니까?`);
+  if (!confirmed) {
+    return;
+  }
+
+  elements.deleteSelectedAccountsButton.disabled = true;
+  try {
+    for (const accountId of accountIds) {
+      await fetchJson(`/api/site-accounts/${accountId}`, { method: "DELETE" });
+    }
+    if (state.selectedAccountId && state.selectedAccountIds.has(state.selectedAccountId)) {
+      state.selectedAccountId = null;
+    }
+    state.selectedAccountIds.clear();
+    await fetchSiteAccounts();
+    setAccountFeedback(`선택한 사이트 계정 ${accountIds.length}건을 삭제했습니다.`);
+  } catch (error) {
+    setAccountFeedback(error.message);
+    await fetchSiteAccounts();
+  }
+}
+
+function setCsvMenuOpen(kind, open) {
+  const menu = kind === "account"
+    ? { button: elements.accountCsvButton, panel: elements.accountCsvPanel }
+    : { button: elements.deviceImportButton, panel: elements.deviceCsvPanel };
+
+  menu.panel.classList.toggle("is-hidden", !open);
+  menu.button.setAttribute("aria-expanded", String(open));
+}
+
+function toggleCsvMenu(kind) {
+  const panel = kind === "account" ? elements.accountCsvPanel : elements.deviceCsvPanel;
+  setCsvMenuOpen(kind, panel.classList.contains("is-hidden"));
+  setCsvMenuOpen(kind === "account" ? "device" : "account", false);
+}
+
+async function downloadAccountCsvTemplate() {
+  try {
+    await downloadCsvFromApi("/api/site-accounts/template-csv", "site_accounts_template.csv");
+    setCsvMenuOpen("account", false);
+    setAccountFeedback("사이트 계정 CSV 양식을 다운로드했습니다.");
+  } catch (error) {
+    setAccountFeedback(error.message);
+  }
+}
+
+async function downloadAccountCsvExport() {
+  try {
+    await downloadCsvFromApi("/api/site-accounts/export-csv", "site_accounts.csv");
+    setCsvMenuOpen("account", false);
+    setAccountFeedback("현재 사이트 계정 전체 CSV를 다운로드했습니다.");
+  } catch (error) {
+    setAccountFeedback(error.message);
+  }
+}
+
+function openAccountCsvImport() {
+  setCsvMenuOpen("account", false);
+  elements.accountImportInput.click();
+}
+
+async function importAccountCsv(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    return;
+  }
+
+  const csvText = await file.text();
+  if (!csvText.trim()) {
+    setAccountFeedback("빈 CSV 파일은 업로드할 수 없습니다.");
+    event.target.value = "";
+    return;
+  }
+
+  try {
+    const result = await fetchJson("/api/site-accounts/import-csv", {
+      method: "POST",
+      body: JSON.stringify({
+        csv_text: csvText,
+        file_name: file.name,
+      }),
+    });
+    state.selectedAccountIds.clear();
+    await fetchSiteAccounts();
+    setAccountFeedback(`CSV 업로드 완료: 신규 ${result.created || 0}건, 중복 제외 ${result.skipped || 0}건`);
+  } catch (error) {
+    setAccountFeedback(error.message);
+  } finally {
+    event.target.value = "";
+  }
+}
+
 function openSelectedSite() {
   const account = getSelectedAccount();
   if (!account || !account.url) {
@@ -1677,6 +1883,12 @@ function applyDeviceFilter(devices) {
   }
 
   next.sort((left, right) => {
+    const leftDate = left.acquired_at || "9999-12-31";
+    const rightDate = right.acquired_at || "9999-12-31";
+    const dateCompare = leftDate.localeCompare(rightDate);
+    if (dateCompare !== 0) {
+      return dateCompare;
+    }
     const leftKey = left.management_no || left.model_name || left.id;
     const rightKey = right.management_no || right.model_name || right.id;
     return leftKey.localeCompare(rightKey, "ko-KR", { sensitivity: "base", numeric: true });
@@ -1686,6 +1898,47 @@ function applyDeviceFilter(devices) {
 
 function getSelectedDevice() {
   return state.deviceInventory.find((item) => item.id === state.selectedDeviceId) || null;
+}
+
+function syncDeviceSelection(filteredDevices = applyDeviceFilter(state.deviceInventory)) {
+  const existingIds = new Set(state.deviceInventory.map((item) => item.id));
+  state.selectedDeviceIds = new Set(
+    Array.from(state.selectedDeviceIds).filter((id) => existingIds.has(id)),
+  );
+
+  const visibleIds = filteredDevices.map((item) => item.id);
+  const selectedVisibleCount = visibleIds.filter((id) => state.selectedDeviceIds.has(id)).length;
+  const selectedCount = state.selectedDeviceIds.size;
+
+  elements.deviceSelectionCount.textContent = `선택 ${selectedCount}건`;
+  elements.deleteSelectedDevicesButton.disabled = selectedCount === 0;
+  elements.selectAllDevicesCheckbox.disabled = visibleIds.length === 0;
+  elements.selectAllDevicesCheckbox.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+  elements.selectAllDevicesCheckbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+}
+
+function toggleDeviceSelection(deviceId, checked) {
+  if (!deviceId) {
+    return;
+  }
+
+  if (checked) {
+    state.selectedDeviceIds.add(deviceId);
+  } else {
+    state.selectedDeviceIds.delete(deviceId);
+  }
+  renderDeviceInventory();
+}
+
+function toggleAllVisibleDevices(checked) {
+  applyDeviceFilter(state.deviceInventory).forEach((item) => {
+    if (checked) {
+      state.selectedDeviceIds.add(item.id);
+    } else {
+      state.selectedDeviceIds.delete(item.id);
+    }
+  });
+  renderDeviceInventory();
 }
 
 function resetDeviceDetail() {
@@ -1777,7 +2030,7 @@ function renderSelectedDevice() {
 
 function renderDeviceInventory() {
   const filtered = applyDeviceFilter(state.deviceInventory);
-  elements.deviceResultMeta.textContent = `정렬: 관리번호 기준 / 현재 ${filtered.length}건`;
+  elements.deviceResultMeta.textContent = `정렬: 구입시기 오름차순 / 현재 ${filtered.length}건`;
 
   const selectedInFiltered = filtered.find((item) => item.id === state.selectedDeviceId);
   if (!selectedInFiltered) {
@@ -1787,9 +2040,10 @@ function renderDeviceInventory() {
   if (!filtered.length) {
     elements.deviceInventoryTableBody.innerHTML = `
       <tr>
-        <td colspan="14" class="empty-cell">조건에 맞는 기기가 없습니다.</td>
+        <td colspan="15" class="empty-cell">조건에 맞는 기기가 없습니다.</td>
       </tr>
     `;
+    syncDeviceSelection(filtered);
     renderSelectedDevice();
     return;
   }
@@ -1803,6 +2057,15 @@ function renderDeviceInventory() {
         : '<span class="muted-inline">없음</span>';
       return `
         <tr data-device-id="${escapeHtml(item.id)}" class="${item.id === state.selectedDeviceId ? "selected" : ""}">
+          <td class="select-cell">
+            <input
+              type="checkbox"
+              class="row-select-checkbox"
+              data-device-select="${escapeHtml(item.id)}"
+              aria-label="${escapeHtml(item.management_no || item.model_name || "기기")} 선택"
+              ${state.selectedDeviceIds.has(item.id) ? "checked" : ""}
+            />
+          </td>
           <td class="device-sequence-cell">${index + 1}</td>
           <td class="wrap-cell">${escapeHtml(item.location || "-")}</td>
           <td class="wrap-cell">${escapeHtml(item.device_type || "-")}</td>
@@ -1822,12 +2085,23 @@ function renderDeviceInventory() {
     })
     .join("");
 
+  syncDeviceSelection(filtered);
+
   Array.from(elements.deviceInventoryTableBody.querySelectorAll("tr[data-device-id]")).forEach((row) => {
     row.addEventListener("click", () => {
       state.selectedDeviceId = row.dataset.deviceId;
       state.deviceEditorMode = "detail";
       renderDeviceInventory();
       renderSelectedDevice();
+    });
+  });
+
+  Array.from(elements.deviceInventoryTableBody.querySelectorAll("[data-device-select]")).forEach((checkbox) => {
+    checkbox.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    checkbox.addEventListener("change", () => {
+      toggleDeviceSelection(checkbox.dataset.deviceSelect, checkbox.checked);
     });
   });
 
@@ -2000,8 +2274,67 @@ async function deleteSelectedDevice() {
   }
 }
 
+async function deleteSelectedDevices() {
+  const deviceIds = Array.from(state.selectedDeviceIds);
+  if (!deviceIds.length) {
+    return;
+  }
+
+  const confirmed = window.confirm(`선택한 기기 ${deviceIds.length}건을 삭제하시겠습니까?`);
+  if (!confirmed) {
+    return;
+  }
+
+  elements.deleteSelectedDevicesButton.disabled = true;
+  try {
+    for (const deviceId of deviceIds) {
+      await fetchJson(`/api/device-inventory/${deviceId}`, { method: "DELETE" });
+    }
+    if (state.selectedDeviceId && state.selectedDeviceIds.has(state.selectedDeviceId)) {
+      state.selectedDeviceId = null;
+    }
+    state.selectedDeviceIds.clear();
+    state.deviceEditorMode = "detail";
+    await loadDeviceInventory();
+    setDeviceFeedback(`선택한 기기 ${deviceIds.length}건을 삭제했습니다.`, {
+      visible: true,
+      autoHideMs: 2600,
+    });
+  } catch (error) {
+    setDeviceFeedback(error.message, { visible: true });
+    await loadDeviceInventory();
+  }
+}
+
 async function openDeviceCsvImport() {
+  setCsvMenuOpen("device", false);
   elements.deviceImportInput.click();
+}
+
+async function downloadDeviceCsvTemplate() {
+  try {
+    await downloadCsvFromApi("/api/device-inventory/template-csv", "device_inventory_template.csv");
+    setCsvMenuOpen("device", false);
+    setDeviceFeedback("기기관리대장 CSV 양식을 다운로드했습니다.", {
+      visible: true,
+      autoHideMs: 2600,
+    });
+  } catch (error) {
+    setDeviceFeedback(error.message, { visible: true });
+  }
+}
+
+async function downloadDeviceCsvExport() {
+  try {
+    await downloadCsvFromApi("/api/device-inventory/export-csv", "device_inventory.csv");
+    setCsvMenuOpen("device", false);
+    setDeviceFeedback("현재 기기관리대장 전체 CSV를 다운로드했습니다.", {
+      visible: true,
+      autoHideMs: 2600,
+    });
+  } catch (error) {
+    setDeviceFeedback(error.message, { visible: true });
+  }
 }
 
 async function importDeviceCsv(event) {
@@ -2026,8 +2359,12 @@ async function importDeviceCsv(event) {
         file_name: file.name,
       }),
     });
+    state.selectedDeviceIds.clear();
     await loadDeviceInventory();
-    hideDeviceFeedback();
+    setDeviceFeedback(`CSV 업로드 완료: 신규 ${result.created || 0}건, 중복 제외 ${result.skipped || 0}건`, {
+      visible: true,
+      autoHideMs: 2600,
+    });
   } catch (error) {
     setDeviceFeedback(error.message, { visible: true });
   } finally {
@@ -2081,7 +2418,19 @@ elements.filterButtons.forEach((button) => {
 
 elements.refreshAccountsButton.addEventListener("click", loadSiteAccounts);
 elements.newAccountButton.addEventListener("click", () => showAccountEditor("create"));
+elements.accountCsvButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleCsvMenu("account");
+});
+elements.accountCsvExportButton.addEventListener("click", downloadAccountCsvExport);
+elements.accountCsvTemplateButton.addEventListener("click", downloadAccountCsvTemplate);
+elements.accountCsvUploadButton.addEventListener("click", openAccountCsvImport);
+elements.accountImportInput.addEventListener("change", importAccountCsv);
 elements.siteAccountSearchInput.addEventListener("input", handleSiteAccountSearch);
+elements.selectAllAccountsCheckbox.addEventListener("change", () => {
+  toggleAllVisibleAccounts(elements.selectAllAccountsCheckbox.checked);
+});
+elements.deleteSelectedAccountsButton.addEventListener("click", deleteSelectedAccounts);
 elements.accountFilterButtons.forEach((button) => {
   button.addEventListener("click", () => activateAccountFilter(button));
 });
@@ -2099,6 +2448,17 @@ elements.cancelAccountEditButton.addEventListener("click", hideAccountEditor);
 elements.refreshDevicesButton.addEventListener("click", handleRefreshDevices);
 elements.newDeviceButton.addEventListener("click", () => showDeviceEditor("create"));
 elements.deviceSearchInput.addEventListener("input", handleDeviceSearch);
+elements.deviceImportButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleCsvMenu("device");
+});
+elements.deviceCsvExportButton.addEventListener("click", downloadDeviceCsvExport);
+elements.deviceCsvTemplateButton.addEventListener("click", downloadDeviceCsvTemplate);
+elements.deviceCsvUploadButton.addEventListener("click", openDeviceCsvImport);
+elements.selectAllDevicesCheckbox.addEventListener("change", () => {
+  toggleAllVisibleDevices(elements.selectAllDevicesCheckbox.checked);
+});
+elements.deleteSelectedDevicesButton.addEventListener("click", deleteSelectedDevices);
 elements.deviceFilterButtons.forEach((button) => {
   button.addEventListener("click", () => activateDeviceFilter(button));
 });
@@ -2111,7 +2471,6 @@ elements.editDeviceButton.addEventListener("click", () => {
 elements.deleteDeviceButton.addEventListener("click", deleteSelectedDevice);
 elements.deviceEditorForm.addEventListener("submit", saveDevice);
 elements.cancelDeviceEditButton.addEventListener("click", hideDeviceEditor);
-elements.deviceImportButton.addEventListener("click", openDeviceCsvImport);
 elements.deviceImportInput.addEventListener("change", importDeviceCsv);
 elements.deviceReportButton.addEventListener("click", downloadDeviceReport);
 elements.deviceImageModalBackdrop.addEventListener("click", closeDeviceImageModal);
@@ -2121,7 +2480,21 @@ elements.deviceImageModal.addEventListener("click", (event) => {
     closeDeviceImageModal();
   }
 });
+
+document.addEventListener("click", (event) => {
+  if (!elements.accountCsvMenu.contains(event.target)) {
+    setCsvMenuOpen("account", false);
+  }
+  if (!elements.deviceCsvMenu.contains(event.target)) {
+    setCsvMenuOpen("device", false);
+  }
+});
+
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    setCsvMenuOpen("account", false);
+    setCsvMenuOpen("device", false);
+  }
   if (event.key === "Escape" && !elements.deviceImageModal.classList.contains("is-hidden")) {
     closeDeviceImageModal();
   }

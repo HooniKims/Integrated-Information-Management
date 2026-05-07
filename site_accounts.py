@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import threading
 import uuid
@@ -13,6 +15,36 @@ def utc_now_iso() -> str:
 
 
 class SiteAccountRepository:
+    csv_headers = [
+        "사이트",
+        "설명",
+        "URL",
+        "ID",
+        "PW",
+        "비고",
+    ]
+
+    _field_aliases = {
+        "사이트": "site_name",
+        "site_name": "site_name",
+        "사이트명": "site_name",
+        "설명": "description",
+        "description": "description",
+        "URL": "url",
+        "url": "url",
+        "주소": "url",
+        "ID": "username",
+        "id": "username",
+        "username": "username",
+        "계정": "username",
+        "PW": "password",
+        "password": "password",
+        "비밀번호": "password",
+        "비고": "note",
+        "note": "note",
+        "메모": "note",
+    }
+
     def __init__(self, accounts_path: Path, audit_log_path: Path) -> None:
         self.accounts_path = accounts_path
         self.audit_log_path = audit_log_path
@@ -24,7 +56,12 @@ class SiteAccountRepository:
             accounts = self._read_records(self.accounts_path, key="accounts")
         sorted_accounts = sorted(
             accounts,
-            key=lambda item: (item.get("site_name", "").casefold(), item.get("username", "").casefold()),
+            key=lambda item: (
+                item.get("updated_at", ""),
+                item.get("created_at", ""),
+                item.get("site_name", "").casefold(),
+            ),
+            reverse=True,
         )
         return [self._serialize_account(item) for item in sorted_accounts]
 
@@ -75,6 +112,65 @@ class SiteAccountRepository:
                 return self._serialize_account(deleted)
         raise KeyError(account_id)
 
+    def import_csv(self, csv_text: str) -> dict:
+        text = self._normalize_text(csv_text).lstrip("\ufeff")
+        if not text:
+            raise ValueError("CSV 내용이 비어 있습니다.")
+
+        reader = csv.DictReader(io.StringIO(text))
+        if not reader.fieldnames:
+            raise ValueError("CSV 헤더를 읽을 수 없습니다.")
+
+        created_count = 0
+        skipped_count = 0
+        processed_items: list[dict] = []
+        skipped_items: list[dict] = []
+
+        for row in reader:
+            if not row:
+                continue
+            payload = self._payload_from_csv_row(row)
+            if not any(payload.values()):
+                continue
+            account, created = self.create_account_if_new(payload)
+            if created:
+                processed_items.append(account)
+                created_count += 1
+            else:
+                skipped_items.append(account)
+                skipped_count += 1
+
+        return {
+            "row_count": len(processed_items),
+            "created": created_count,
+            "updated": 0,
+            "skipped": skipped_count,
+            "upserted": created_count,
+            "items": processed_items,
+            "skipped_items": skipped_items,
+        }
+
+    def create_account_if_new(self, payload: dict) -> tuple[dict, bool]:
+        account = self._build_account_record(payload)
+        with self._lock:
+            accounts = self._read_records(self.accounts_path, key="accounts")
+            existing_index = self._find_account_index(accounts, account["site_name"], account["username"])
+            if existing_index is None:
+                accounts.append(account)
+                self._write_records(self.accounts_path, key="accounts", records=accounts)
+                return self._serialize_account(account), True
+
+            return self._serialize_account(accounts[existing_index]), False
+
+    def export_csv(self, *, include_items: bool = True) -> str:
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=self.csv_headers)
+        writer.writeheader()
+        if include_items:
+            for account in self.list_accounts():
+                writer.writerow(self._account_to_csv_row(account))
+        return "\ufeff" + buffer.getvalue()
+
     def summarize_accounts(self) -> dict:
         accounts = self.list_accounts()
         return {
@@ -115,6 +211,45 @@ class SiteAccountRepository:
             "created_at": account.get("created_at", ""),
             "updated_at": account.get("updated_at", ""),
         }
+
+    def _account_to_csv_row(self, account: dict) -> dict:
+        return {
+            "사이트": account.get("site_name", ""),
+            "설명": account.get("description", ""),
+            "URL": account.get("url", ""),
+            "ID": account.get("username", ""),
+            "PW": account.get("password", ""),
+            "비고": account.get("note", ""),
+        }
+
+    def _payload_from_csv_row(self, row: dict) -> dict:
+        payload = {
+            "site_name": "",
+            "description": "",
+            "url": "",
+            "username": "",
+            "password": "",
+            "note": "",
+        }
+        for raw_key, raw_value in row.items():
+            key = self._normalize_text(raw_key)
+            if not key:
+                continue
+            field = self._field_aliases.get(key)
+            if field and field in payload:
+                payload[field] = self._normalize_text(raw_value)
+        return payload
+
+    def _find_account_index(self, accounts: list[dict], site_name: str, username: str) -> int | None:
+        target_site_name = site_name.casefold()
+        target_username = username.casefold()
+        for index, account in enumerate(accounts):
+            if (
+                self._normalize_text(account.get("site_name")).casefold() == target_site_name
+                and self._normalize_text(account.get("username")).casefold() == target_username
+            ):
+                return index
+        return None
 
     def _normalize_text(self, value: object) -> str:
         return str(value or "").strip()

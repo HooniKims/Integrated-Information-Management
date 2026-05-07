@@ -44,6 +44,36 @@ def _today() -> date:
 
 
 class DeviceInventoryRepository:
+    asset_groups = [
+        "교원용PC",
+        "정보교과실PC",
+        "디벗",
+        "전자칠판",
+        "태블릿(교무실)",
+        "태블릿(과학실)",
+        "특별실",
+        "진로상담실PC",
+    ]
+
+    device_types = [
+        "노트북",
+        "데스크톱",
+        "태블릿",
+        "전자칠판",
+        "기타",
+    ]
+
+    statuses = [
+        "정상 사용",
+        "예비",
+        "점검 필요",
+        "점검중",
+        "수리중",
+        "교체 검토",
+        "불용 예정",
+        "불용 완료",
+    ]
+
     csv_headers = [
         "관리번호",
         "분류",
@@ -219,8 +249,9 @@ class DeviceInventoryRepository:
             raise ValueError("CSV 헤더를 읽을 수 없습니다.")
 
         created_count = 0
-        updated_count = 0
+        skipped_count = 0
         processed_items: list[dict] = []
+        skipped_items: list[dict] = []
 
         for row in reader:
             if not row:
@@ -228,20 +259,41 @@ class DeviceInventoryRepository:
             payload = self._payload_from_csv_row(row)
             if not any(payload.values()):
                 continue
-            device, created = self.upsert_device(payload, event_type="import")
-            processed_items.append(device)
+            device, created = self.create_device_if_new(payload)
             if created:
+                processed_items.append(device)
                 created_count += 1
             else:
-                updated_count += 1
+                skipped_items.append(device)
+                skipped_count += 1
 
         return {
             "row_count": len(processed_items),
             "created": created_count,
-            "updated": updated_count,
-            "upserted": len(processed_items),
+            "updated": 0,
+            "skipped": skipped_count,
+            "upserted": created_count,
             "items": processed_items,
+            "skipped_items": skipped_items,
         }
+
+    def create_device_if_new(self, payload: dict) -> tuple[dict, bool]:
+        normalized = self._build_device_record(payload)
+        with self._lock:
+            devices = self._read_records(self.inventory_path, key="devices")
+            existing_index = self._find_device_index(devices, normalized["management_no"])
+            if existing_index is not None:
+                return self._serialize_device(devices[existing_index]), False
+
+            devices.append(normalized)
+            self._write_records(self.inventory_path, key="devices", records=devices)
+            self._append_event(
+                device_id=normalized["id"],
+                management_no=normalized["management_no"],
+                event_type="import",
+                event_summary=f'{normalized["management_no"]} 등록',
+            )
+            return self._serialize_device(normalized), True
 
     def export_csv(self) -> str:
         devices = self.list_devices()
@@ -250,6 +302,12 @@ class DeviceInventoryRepository:
         writer.writeheader()
         for device in devices:
             writer.writerow(self._device_to_csv_row(device))
+        return "\ufeff" + buffer.getvalue()
+
+    def export_csv_template(self) -> str:
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=self.csv_headers)
+        writer.writeheader()
         return "\ufeff" + buffer.getvalue()
 
     def export_report_workbook(self) -> bytes:
@@ -746,8 +804,9 @@ class DeviceInventoryRepository:
         return sorted(
             devices,
             key=lambda item: (
-                item.get("management_no", "").casefold(),
+                item.get("introduced_date", "") or "9999-12-31",
                 item.get("asset_group", "").casefold(),
+                item.get("management_no", "").casefold(),
                 item.get("created_at", ""),
             ),
         )
