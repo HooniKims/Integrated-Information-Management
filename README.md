@@ -101,7 +101,7 @@ chmod +x install_iim.sh
 - `requirements.txt` 기반 Python 패키지 설치
 - UFW 방화벽에서 내부망 SSH 접속 허용
 - 내부망 `10.73.78.0/24`에서 `8765` 포트 접속 허용
-- 고정 IP `10.73.78.15/24`, 기본 게이트웨이 `10.73.78.254`, DNS `8.8.8.8` 설정
+- 고정 IP `10.73.78.15/24`, 기본 게이트웨이 `10.73.78.254`, 기본 DNS `219.250.36.130`, 보조 DNS `8.8.8.8` 설정
 - `iim.service` systemd 서비스 생성
 - 부팅 시 자동 실행 등록
 - 서비스 시작 및 상태 확인
@@ -116,7 +116,8 @@ DEFAULT_LOGIN_ID="dcms"
 DEFAULT_LOGIN_PASSWORD="dcms04935!"
 STATIC_IP="10.73.78.15"
 GATEWAY="10.73.78.254"
-DNS_SERVER="8.8.8.8"
+PRIMARY_DNS_SERVER="219.250.36.130"
+SECONDARY_DNS_SERVER="8.8.8.8"
 ```
 
 설치 후 접속 주소 예시는 다음과 같습니다.

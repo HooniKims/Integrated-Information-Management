@@ -11,7 +11,9 @@ STATIC_IP="10.73.78.15"
 STATIC_PREFIX="24"
 STATIC_IP_CIDR="${STATIC_IP}/${STATIC_PREFIX}"
 GATEWAY="10.73.78.254"
-DNS_SERVER="8.8.8.8"
+PRIMARY_DNS_SERVER="219.250.36.130"
+SECONDARY_DNS_SERVER="8.8.8.8"
+DNS_SERVERS="${PRIMARY_DNS_SERVER} ${SECONDARY_DNS_SERVER}"
 CURRENT_USER="$(whoami)"
 INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -34,7 +36,8 @@ configure_static_ip() {
     echo "네트워크 인터페이스: $interface_name"
     echo "고정 IP: $STATIC_IP_CIDR"
     echo "기본 게이트웨이: $GATEWAY"
-    echo "DNS: $DNS_SERVER"
+    echo "기본 DNS: $PRIMARY_DNS_SERVER"
+    echo "보조 DNS: $SECONDARY_DNS_SERVER"
 
     if command -v nmcli >/dev/null 2>&1; then
         local connection_name
@@ -53,7 +56,7 @@ configure_static_ip() {
             ipv4.method manual \
             ipv4.addresses "$STATIC_IP_CIDR" \
             ipv4.gateway "$GATEWAY" \
-            ipv4.dns "$DNS_SERVER" \
+            ipv4.dns "$DNS_SERVERS" \
             connection.autoconnect yes
 
         sudo nmcli connection up "$connection_name" || {
@@ -70,7 +73,7 @@ configure_static_ip() {
 interface ${interface_name}
 static ip_address=${STATIC_IP_CIDR}
 static routers=${GATEWAY}
-static domain_name_servers=${DNS_SERVER}
+static domain_name_servers=${DNS_SERVERS}
 EOF
 
         if systemctl list-unit-files | grep -q '^dhcpcd\.service'; then
@@ -121,7 +124,8 @@ echo "허용 내부망: $ALLOWED_NETWORK"
 echo "기본 로그인 ID: $DEFAULT_LOGIN_ID"
 echo "설정할 고정 IP: $STATIC_IP_CIDR"
 echo "기본 게이트웨이: $GATEWAY"
-echo "DNS: $DNS_SERVER"
+echo "기본 DNS: $PRIMARY_DNS_SERVER"
+echo "보조 DNS: $SECONDARY_DNS_SERVER"
 echo ""
 
 echo "[1/13] apt 패키지 목록 업데이트"
