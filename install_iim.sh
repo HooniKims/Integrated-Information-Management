@@ -133,7 +133,7 @@ sudo apt upgrade -y
 
 echo ""
 echo "[3/13] 필수 시스템 패키지 설치"
-sudo apt install -y git python3 python3-pip python3-venv ufw curl iputils-ping arping libcap2-bin openssh-server samba-common-bin
+sudo apt install -y git python3 python3-pip python3-venv ufw curl iputils-ping arping libcap2-bin openssh-server samba-common-bin nbtscan
 
 if command -v arping >/dev/null 2>&1 && command -v setcap >/dev/null 2>&1; then
     sudo setcap cap_net_raw+ep "$(command -v arping)" || {

@@ -25,6 +25,24 @@ class NetbiosResolutionTests(unittest.TestCase):
         self.assertEqual(source, "netbios")
         run_command.assert_called_once_with(["nmblookup", "-A", "10.73.78.51"], timeout_seconds=2.5)
 
+    def test_linux_nbtscan_fallback_resolves_host_name(self) -> None:
+        nmblookup_output = """Looking up status of 10.73.78.52
+No reply from 10.73.78.52
+"""
+        nbtscan_output = """10.73.78.52     DESKTOP-ABC123  <server>  WORKGROUP  00:11:22:33:44:55
+"""
+
+        with (
+            patch("scanner.platform.system", return_value="Linux"),
+            patch("scanner.run_command", side_effect=[nmblookup_output, nbtscan_output]) as run_command,
+        ):
+            hostname, source = scanner.resolve_netbios_name("10.73.78.52")
+
+        self.assertEqual(hostname, "DESKTOP-ABC123")
+        self.assertEqual(source, "nbtscan")
+        run_command.assert_any_call(["nmblookup", "-A", "10.73.78.52"], timeout_seconds=2.5)
+        run_command.assert_any_call(["nbtscan", "-q", "10.73.78.52"], timeout_seconds=2.5)
+
 
 class IpConflictDetectionTests(unittest.TestCase):
     def test_linux_arping_detects_multiple_mac_addresses_for_same_ip(self) -> None:

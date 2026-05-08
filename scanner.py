@@ -138,6 +138,25 @@ def resolve_netbios_name(ip: str) -> tuple[str | None, str | None]:
         if match and "<GROUP>" not in line.upper():
             return match.group(1).strip(), "netbios"
 
+    if system != "windows":
+        return resolve_nbtscan_name(ip)
+
+    return None, None
+
+
+def resolve_nbtscan_name(ip: str) -> tuple[str | None, str | None]:
+    try:
+        output = run_command(["nbtscan", "-q", ip], timeout_seconds=2.5)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None, None
+
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] == ip:
+            hostname = parts[1].strip()
+            if hostname and hostname != "<unknown>":
+                return hostname, "nbtscan"
+
     return None, None
 
 

@@ -13,6 +13,7 @@
 - IP 오름차순 정렬, 검색, 필터, 상세 확인
 - 장치명, MAC 주소, 응답 여부 확인
 - Linux/Raspberry Pi 환경에서 NetBIOS 이름 조회(`nmblookup`) 지원
+- `nmblookup`으로 이름이 안 잡히면 `nbtscan` fallback으로 Windows PC명 추가 조회
 - 같은 IP에서 여러 MAC이 응답하면 `IP 충돌 의심`으로 표시
 - IP별 저장 장치명을 수정해 `data/scan_device_names.json`에 유지
 - IP 스캔 결과 CSV 전체 다운로드
@@ -91,7 +92,7 @@ chmod +x install_iim.sh
 `install_iim.sh`는 다음 작업을 수행합니다.
 
 - `apt update`, `apt upgrade`
-- `git`, `python3`, `python3-pip`, `python3-venv`, `ufw`, `curl`, `iputils-ping`, `arping`, `libcap2-bin`, `openssh-server`, `samba-common-bin` 설치
+- `git`, `python3`, `python3-pip`, `python3-venv`, `ufw`, `curl`, `iputils-ping`, `arping`, `libcap2-bin`, `openssh-server`, `samba-common-bin`, `nbtscan` 설치
 - `arping`에 IP 충돌 감지용 raw socket 권한 설정
 - 기본 로그인용 `.env` 생성
 - SSH 서버 자동 실행 등록 및 시작
