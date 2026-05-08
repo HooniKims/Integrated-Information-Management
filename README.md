@@ -12,8 +12,8 @@
 - 사용자 지정 시작/끝 IP 스캔
 - IP 오름차순 정렬, 검색, 필터, 상세 확인
 - 장치명, MAC 주소, 응답 여부 확인
-- Linux/Raspberry Pi 환경에서 NetBIOS 이름 조회(`nmblookup`) 지원
-- `nmblookup`으로 이름이 안 잡히면 `nbtscan` fallback으로 Windows PC명 추가 조회
+- Linux/Raspberry Pi 환경에서 `nbtscan` 기반 Windows PC명 조회 지원
+- `nbtscan`으로 이름이 안 잡히면 `nmblookup -A` fallback으로 NetBIOS 이름 추가 조회
 - 같은 IP에서 여러 MAC이 응답하면 `IP 충돌 의심`으로 표시
 - IP별 저장 장치명을 수정해 `data/scan_device_names.json`에 유지
 - IP 스캔 결과 CSV 전체 다운로드

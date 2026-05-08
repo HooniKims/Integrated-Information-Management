@@ -7,8 +7,24 @@ import scanner
 
 
 class NetbiosResolutionTests(unittest.TestCase):
-    def test_linux_nmblookup_output_resolves_host_name(self) -> None:
-        output = """Looking up status of 10.73.78.51
+    def test_linux_nbtscan_primary_resolves_host_name(self) -> None:
+        output = """10.73.78.52     DESKTOP-ABC123  <server>  WORKGROUP  00:11:22:33:44:55
+"""
+
+        with (
+            patch("scanner.platform.system", return_value="Linux"),
+            patch("scanner.run_command", return_value=output) as run_command,
+        ):
+            hostname, source = scanner.resolve_netbios_name("10.73.78.52")
+
+        self.assertEqual(hostname, "DESKTOP-ABC123")
+        self.assertEqual(source, "nbtscan")
+        run_command.assert_called_once_with(["nbtscan", "-q", "10.73.78.52"], timeout_seconds=2.5)
+
+    def test_linux_nmblookup_fallback_resolves_host_name(self) -> None:
+        nbtscan_output = """10.73.78.51     <unknown>  <server>  WORKGROUP  00:11:22:33:44:55
+"""
+        nmblookup_output = """Looking up status of 10.73.78.51
         FX-1C7D2230FF3C <00> -         B <ACTIVE> <PERMANENT>
         WORKGROUP       <00> - <GROUP> B <ACTIVE> <PERMANENT>
 
@@ -17,31 +33,14 @@ class NetbiosResolutionTests(unittest.TestCase):
 
         with (
             patch("scanner.platform.system", return_value="Linux"),
-            patch("scanner.run_command", return_value=output) as run_command,
+            patch("scanner.run_command", side_effect=[nbtscan_output, nmblookup_output]) as run_command,
         ):
             hostname, source = scanner.resolve_netbios_name("10.73.78.51")
 
         self.assertEqual(hostname, "FX-1C7D2230FF3C")
         self.assertEqual(source, "netbios")
-        run_command.assert_called_once_with(["nmblookup", "-A", "10.73.78.51"], timeout_seconds=2.5)
-
-    def test_linux_nbtscan_fallback_resolves_host_name(self) -> None:
-        nmblookup_output = """Looking up status of 10.73.78.52
-No reply from 10.73.78.52
-"""
-        nbtscan_output = """10.73.78.52     DESKTOP-ABC123  <server>  WORKGROUP  00:11:22:33:44:55
-"""
-
-        with (
-            patch("scanner.platform.system", return_value="Linux"),
-            patch("scanner.run_command", side_effect=[nmblookup_output, nbtscan_output]) as run_command,
-        ):
-            hostname, source = scanner.resolve_netbios_name("10.73.78.52")
-
-        self.assertEqual(hostname, "DESKTOP-ABC123")
-        self.assertEqual(source, "nbtscan")
-        run_command.assert_any_call(["nmblookup", "-A", "10.73.78.52"], timeout_seconds=2.5)
-        run_command.assert_any_call(["nbtscan", "-q", "10.73.78.52"], timeout_seconds=2.5)
+        self.assertEqual(run_command.call_args_list[0].args[0], ["nbtscan", "-q", "10.73.78.51"])
+        self.assertEqual(run_command.call_args_list[1].args[0], ["nmblookup", "-A", "10.73.78.51"])
 
 
 class IpConflictDetectionTests(unittest.TestCase):

@@ -124,22 +124,38 @@ def reverse_dns(ip: str) -> tuple[str | None, str | None]:
 def resolve_netbios_name(ip: str) -> tuple[str | None, str | None]:
     system = platform.system().lower()
     if system == "windows":
-        command = ["nbtstat", "-A", ip]
-    else:
-        command = ["nmblookup", "-A", ip]
+        return resolve_nbtstat_name(ip)
 
+    hostname, source = resolve_nbtscan_name(ip)
+    if hostname:
+        return hostname, source
+
+    return resolve_nmblookup_name(ip)
+
+
+def resolve_nbtstat_name(ip: str) -> tuple[str | None, str | None]:
     try:
-        output = run_command(command, timeout_seconds=2.5)
+        output = run_command(["nbtstat", "-A", ip], timeout_seconds=2.5)
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return None, None
 
+    return parse_netbios_status_name(output)
+
+
+def resolve_nmblookup_name(ip: str) -> tuple[str | None, str | None]:
+    try:
+        output = run_command(["nmblookup", "-A", ip], timeout_seconds=2.5)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None, None
+
+    return parse_netbios_status_name(output)
+
+
+def parse_netbios_status_name(output: str) -> tuple[str | None, str | None]:
     for line in output.splitlines():
         match = re.search(r"^\s*([^\s]+)\s+<00>", line, re.IGNORECASE)
         if match and "<GROUP>" not in line.upper():
             return match.group(1).strip(), "netbios"
-
-    if system != "windows":
-        return resolve_nbtscan_name(ip)
 
     return None, None
 
