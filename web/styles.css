@@ -736,6 +736,43 @@ button:disabled {
   width: 100%;
 }
 
+.scan-name-editor {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line-default);
+  border-radius: 0.7rem;
+  background: var(--bg-subtle);
+}
+
+.scan-name-editor label {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.scan-name-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.scan-name-editor input {
+  width: 100%;
+  min-height: 2.4rem;
+  border: 1px solid var(--line-default);
+  border-radius: 0.55rem;
+  padding: 0.52rem 0.65rem;
+  font: inherit;
+}
+
+.scan-name-editor-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .scan-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto auto;

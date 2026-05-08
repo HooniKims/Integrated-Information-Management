@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import platform
 import re
 import socket
@@ -11,12 +12,13 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 MAX_SCAN_HOSTS = 512
 DEFAULT_WORKERS = 32
 PING_TIMEOUT_MS = 650
-DEFAULT_RANGE_START = "10.73.78.2"
+DEFAULT_RANGE_START = "10.73.78.1"
 DEFAULT_RANGE_END = "10.73.78.254"
 
 
@@ -84,6 +86,10 @@ def run_command(command: list[str], timeout_seconds: float) -> str:
     return (completed.stdout or "") + (completed.stderr or "")
 
 
+def normalize_mac_address(value: str) -> str:
+    return value.strip().lower().replace(":", "-")
+
+
 def ping_ip(ip: str) -> tuple[bool, int | None, str]:
     system = platform.system().lower()
     if system == "windows":
@@ -116,17 +122,20 @@ def reverse_dns(ip: str) -> tuple[str | None, str | None]:
 
 
 def resolve_netbios_name(ip: str) -> tuple[str | None, str | None]:
-    if platform.system().lower() != "windows":
-        return None, None
+    system = platform.system().lower()
+    if system == "windows":
+        command = ["nbtstat", "-A", ip]
+    else:
+        command = ["nmblookup", "-A", ip]
 
     try:
-        output = run_command(["nbtstat", "-A", ip], timeout_seconds=2.5)
+        output = run_command(command, timeout_seconds=2.5)
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return None, None
 
     for line in output.splitlines():
-        match = re.search(r"^\s*([^\s]+)\s+<00>\s+UNIQUE", line, re.IGNORECASE)
-        if match:
+        match = re.search(r"^\s*([^\s]+)\s+<00>", line, re.IGNORECASE)
+        if match and "<GROUP>" not in line.upper():
             return match.group(1).strip(), "netbios"
 
     return None, None
@@ -147,21 +156,52 @@ def lookup_mac(ip: str) -> str | None:
     return None
 
 
-def probe_ip(ip: str, index: int) -> dict[str, Any]:
+def detect_ip_conflict(ip: str) -> tuple[bool, list[str]]:
+    if platform.system().lower() == "windows":
+        return False, []
+
+    try:
+        output = run_command(["arping", "-c", "3", "-w", "2", ip], timeout_seconds=3.0)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False, []
+
+    seen: set[str] = set()
+    mac_addresses: list[str] = []
+    for match in re.finditer(r"\[([0-9a-fA-F:-]{17})\]", output):
+        mac_address = normalize_mac_address(match.group(1))
+        if mac_address not in seen:
+            seen.add(mac_address)
+            mac_addresses.append(mac_address)
+
+    return len(mac_addresses) > 1, mac_addresses
+
+
+def probe_ip(ip: str, index: int, custom_name: str = "") -> dict[str, Any]:
     reachable, latency_ms, ping_note = ping_ip(ip)
     hostname = None
     hostname_source = None
     mac_address = None
+    conflict_detected = False
+    conflict_mac_addresses: list[str] = []
 
     if reachable:
         hostname, hostname_source = reverse_dns(ip)
         if not hostname:
             hostname, hostname_source = resolve_netbios_name(ip)
         mac_address = lookup_mac(ip)
+        conflict_detected, conflict_mac_addresses = detect_ip_conflict(ip)
+        if not mac_address and conflict_mac_addresses:
+            mac_address = conflict_mac_addresses[0]
 
-    if reachable and hostname:
+    if conflict_detected:
+        status = "conflict"
+        note = f"IP 충돌 의심: 같은 IP에서 여러 MAC 응답 ({', '.join(conflict_mac_addresses)})"
+    elif reachable and hostname:
         status = "healthy"
         note = "Host responded and a name was resolved."
+    elif reachable and custom_name:
+        status = "healthy"
+        note = "Host responded and a saved name is available."
     elif reachable:
         status = "warning"
         note = "Host responded but name resolution was not available."
@@ -174,13 +214,69 @@ def probe_ip(ip: str, index: int) -> dict[str, Any]:
         "ip": ip,
         "reachable": reachable,
         "latency_ms": latency_ms,
+        "custom_name": custom_name,
         "hostname": hostname or "",
         "hostname_source": hostname_source or "",
         "mac_address": mac_address or "",
+        "conflict_detected": conflict_detected,
+        "conflict_mac_addresses": conflict_mac_addresses,
         "status": status,
         "note": note,
         "reported_at": utc_now_iso(),
     }
+
+
+class ScanNameRepository:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+        self._ensure_file()
+
+    def get_name(self, ip: str) -> str:
+        normalized_ip = self._normalize_ip(ip)
+        with self._lock:
+            payload = self._read_payload()
+        return str(payload.get("names", {}).get(normalized_ip, "") or "")
+
+    def set_name(self, ip: str, name: str) -> dict[str, str]:
+        normalized_ip = self._normalize_ip(ip)
+        normalized_name = str(name or "").strip()
+        with self._lock:
+            payload = self._read_payload()
+            names = dict(payload.get("names", {}))
+            if normalized_name:
+                names[normalized_ip] = normalized_name
+            else:
+                names.pop(normalized_ip, None)
+            self._write_payload({"names": names})
+        return {"ip": normalized_ip, "name": normalized_name}
+
+    def _ensure_file(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.path.exists():
+            self._write_payload({"names": {}})
+
+    def _read_payload(self) -> dict[str, Any]:
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {"names": {}}
+        if not isinstance(data, dict) or not isinstance(data.get("names"), dict):
+            return {"names": {}}
+        return data
+
+    def _write_payload(self, payload: dict[str, Any]) -> None:
+        self.path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _normalize_ip(ip: str) -> str:
+        try:
+            return str(ipaddress.IPv4Address(str(ip).strip()))
+        except ipaddress.AddressValueError as exc:
+            raise ValueError("Invalid IP address.") from exc
 
 
 @dataclass
@@ -210,7 +306,7 @@ class ScanJob:
         for result in self.results.values():
             if result["reachable"]:
                 alive += 1
-            if result["reachable"] and not result["hostname"]:
+            if result["reachable"] and not result.get("hostname") and not result.get("custom_name"):
                 unresolved += 1
             if result["mac_address"]:
                 has_mac += 1
@@ -243,9 +339,10 @@ class ScanJob:
 
 
 class ScanManager:
-    def __init__(self) -> None:
+    def __init__(self, name_lookup=None) -> None:
         self._jobs: dict[str, ScanJob] = {}
         self._lock = threading.Lock()
+        self._name_lookup = name_lookup or (lambda _ip: "")
 
     def create_job(self, start_ip: str, end_ip: str) -> ScanJob:
         targets, normalized_start, normalized_end = normalize_ip_range(start_ip, end_ip)
@@ -286,7 +383,7 @@ class ScanManager:
         try:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_map = {
-                    executor.submit(probe_ip, ip, index): index
+                    executor.submit(probe_ip, ip, index, self._name_lookup(ip)): index
                     for index, ip in enumerate(job.targets)
                 }
 

@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from scanner import ScanManager, get_local_host_info
+from scanner import ScanManager, ScanNameRepository, get_local_host_info
 from device_inventory import DeviceInventoryRepository
 from site_accounts import SiteAccountRepository
 
@@ -53,7 +53,8 @@ PUBLIC_API_PATHS = {"/api/health", "/api/login", "/api/logout", "/api/session"}
 SESSIONS: dict[str, dict[str, str]] = {}
 SESSION_LOCK = threading.Lock()
 
-SCAN_MANAGER = ScanManager()
+SCAN_NAME_REPOSITORY = ScanNameRepository(DATA_DIR / "scan_device_names.json")
+SCAN_MANAGER = ScanManager(name_lookup=SCAN_NAME_REPOSITORY.get_name)
 SITE_ACCOUNT_REPOSITORY = SiteAccountRepository(DATA_DIR / "site_accounts.json", DATA_DIR / "site_account_audit.json")
 DEVICE_INVENTORY_REPOSITORY = DeviceInventoryRepository(
     DATA_DIR / "device_inventory.json",
@@ -168,6 +169,15 @@ class AppHandler(BaseHTTPRequestHandler):
             except ValueError:
                 limit = 20
             self._send_json({"items": DEVICE_INVENTORY_REPOSITORY.list_events(limit=limit, event_type=event_type)})
+            return
+
+        if path == "/api/scan-device-names/template-csv":
+            self._send_json(
+                {
+                    "filename": "scan_device_names_template.csv",
+                    "csv_text": "IP,저장 장치명\n10.73.78.1,\n",
+                }
+            )
             return
 
         if path.startswith("/api/device-inventory/") and path.count("/") == 3:
@@ -326,6 +336,22 @@ class AppHandler(BaseHTTPRequestHandler):
         path = parsed.path
 
         if self._requires_auth(path) and not self._ensure_authenticated():
+            return
+
+        if path == "/api/scan-device-names":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_json({"error": "Invalid JSON body."}, status=HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                updated = SCAN_NAME_REPOSITORY.set_name(
+                    str(payload.get("ip", "") or ""),
+                    str(payload.get("name", "") or ""),
+                )
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                return
+            self._send_json(updated)
             return
 
         if path.startswith("/api/device-inventory/") and path.count("/") == 3:

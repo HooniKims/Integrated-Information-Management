@@ -8,10 +8,15 @@
 
 ### IP 스캔
 
-- 기본 범위 `10.73.78.2 ~ 10.73.78.254` 스캔
+- 기본 범위 `10.73.78.1 ~ 10.73.78.254` 스캔
 - 사용자 지정 시작/끝 IP 스캔
 - IP 오름차순 정렬, 검색, 필터, 상세 확인
 - 장치명, MAC 주소, 응답 여부 확인
+- Linux/Raspberry Pi 환경에서 NetBIOS 이름 조회(`nmblookup`) 지원
+- 같은 IP에서 여러 MAC이 응답하면 `IP 충돌 의심`으로 표시
+- IP별 저장 장치명을 수정해 `data/scan_device_names.json`에 유지
+- IP 스캔 결과 CSV 전체 다운로드
+- IP별 저장 장치명 CSV 양식 다운로드 및 업로드
 
 ### 사이트 계정 관리
 
@@ -86,12 +91,16 @@ chmod +x install_iim.sh
 `install_iim.sh`는 다음 작업을 수행합니다.
 
 - `apt update`, `apt upgrade`
-- `git`, `python3`, `python3-pip`, `python3-venv`, `ufw`, `curl`, `iputils-ping` 설치
+- `git`, `python3`, `python3-pip`, `python3-venv`, `ufw`, `curl`, `iputils-ping`, `arping`, `libcap2-bin`, `openssh-server`, `samba-common-bin` 설치
+- `arping`에 IP 충돌 감지용 raw socket 권한 설정
+- 기본 로그인용 `.env` 생성
+- SSH 서버 자동 실행 등록 및 시작
 - `server.py`와 `requirements.txt` 존재 여부 확인
 - 프로젝트 폴더 안에 `venv` 가상환경 생성
 - `requirements.txt` 기반 Python 패키지 설치
-- UFW 방화벽에서 SSH 허용
+- UFW 방화벽에서 내부망 SSH 접속 허용
 - 내부망 `10.73.78.0/24`에서 `8765` 포트 접속 허용
+- 고정 IP `10.73.78.15/24`, 기본 게이트웨이 `10.73.78.254`, DNS `8.8.8.8` 설정
 - `iim.service` systemd 서비스 생성
 - 부팅 시 자동 실행 등록
 - 서비스 시작 및 상태 확인
@@ -102,21 +111,27 @@ chmod +x install_iim.sh
 APP_NAME="iim"
 PORT="8765"
 ALLOWED_NETWORK="10.73.78.0/24"
+DEFAULT_LOGIN_ID="dcms"
+DEFAULT_LOGIN_PASSWORD="dcms04935!"
+STATIC_IP="10.73.78.15"
+GATEWAY="10.73.78.254"
+DNS_SERVER="8.8.8.8"
 ```
 
 설치 후 접속 주소 예시는 다음과 같습니다.
 
 ```text
-http://라즈베리파이IP:8765
+http://10.73.78.15:8765
 ```
 
 운영 중 자주 쓰는 명령은 다음과 같습니다.
 
 ```bash
 sudo systemctl status iim
+sudo systemctl status ssh
 sudo systemctl restart iim
 journalctl -u iim -f
-ss -tulnp | grep 8765
+ss -tulnp | grep -E '(:22|:8765)'
 sudo ufw status numbered
 ```
 
@@ -125,6 +140,7 @@ sudo ufw status numbered
 앱 데이터는 런타임에 아래 JSON 파일로 저장됩니다.
 
 - `data/site_accounts.json`
+- `data/scan_device_names.json`
 - `data/device_inventory.json`
 - `data/device_inventory_events.json`
 
@@ -134,7 +150,7 @@ sudo ufw status numbered
 
 ## CSV 사용 방식
 
-사이트 계정 관리와 기기관리대장 모두 같은 흐름으로 사용할 수 있습니다.
+사이트 계정 관리, 기기관리대장, IP 스캔 저장 장치명은 비슷한 흐름으로 사용할 수 있습니다.
 
 1. `전체 다운`으로 현재 저장된 내용을 CSV로 내려받습니다.
 2. 내려받은 CSV를 엑셀 등에서 수정하거나 새 행을 추가합니다.
@@ -145,6 +161,7 @@ sudo ufw status numbered
 
 - 사이트 계정 관리: `사이트 + ID`
 - 기기관리대장: `관리번호`
+- IP 스캔 저장 장치명: `IP`
 
 ## 폴더 구조
 

@@ -94,7 +94,7 @@
         </div>
         <div class="quick-search static-search">
           <span id="topbarContextLabel">학교 기본 범위</span>
-          <strong id="topbarContextValue">10.73.78.2 ~ 10.73.78.254</strong>
+          <strong id="topbarContextValue">10.73.78.1 ~ 10.73.78.254</strong>
         </div>
       </div>
       <div class="topbar-right">
@@ -121,7 +121,7 @@
           <section class="alert-bar">
             <div class="alert-copy">
               <span class="alert-label">Range Scan</span>
-              <span class="alert-title">학교 기본 범위는 10.73.78.2 부터 10.73.78.254 까지입니다.</span>
+              <span class="alert-title">학교 기본 범위는 10.73.78.1 부터 10.73.78.254 까지입니다.</span>
               <span class="alert-meta">현재 버전은 범위 스캔 중심이며, 결과는 항상 IP 오름차순으로 정렬됩니다.</span>
             </div>
             <button class="secondary-button" type="button" id="cancelScanButton" disabled>스캔 중지</button>
@@ -131,7 +131,7 @@
             <form class="scan-form" id="scanForm">
               <label class="search-input">
                 <strong>시작 IP</strong>
-                <input type="text" id="startIpInput" value="10.73.78.2" aria-label="시작 IP" />
+                <input type="text" id="startIpInput" value="10.73.78.1" aria-label="시작 IP" />
               </label>
               <label class="search-input">
                 <strong>끝 IP</strong>
@@ -200,7 +200,15 @@
                   <h2 class="panel-title">스캔 결과</h2>
                   <span class="panel-subtitle">응답 상태와 이름 해석 결과를 범위 단위로 확인합니다. 항상 IP 오름차순으로 표시됩니다.</span>
                 </div>
-                <button class="secondary-button" type="button" id="copyJsonButton">결과 CSV 다운</button>
+                <div class="csv-menu" id="scanCsvMenu">
+                  <button class="secondary-button" type="button" id="scanCsvButton" aria-expanded="false" aria-controls="scanCsvPanel">CSV 다운로드</button>
+                  <div class="csv-menu-panel is-hidden" id="scanCsvPanel">
+                    <button class="secondary-button" type="button" id="scanCsvExportButton">전체 다운로드</button>
+                    <button class="secondary-button" type="button" id="scanCsvTemplateButton">양식 다운로드</button>
+                    <button class="primary-button" type="button" id="scanCsvUploadButton">파일 선택</button>
+                  </div>
+                </div>
+                <input type="file" id="scanNameImportInput" accept=".csv,text/csv" class="is-visually-hidden" />
               </div>
               <div class="panel-body">
                 <table class="scan-table">
@@ -262,6 +270,15 @@
                     <span class="detail-item-label">마지막 보고</span>
                     <span class="detail-item-value" id="detailReportedAt">-</span>
                   </div>
+                </div>
+
+                <div class="scan-name-editor">
+                  <label for="detailCustomNameInput">저장 장치명</label>
+                  <div class="scan-name-editor-row">
+                    <input type="text" id="detailCustomNameInput" placeholder="예: 교무실 복합기" disabled />
+                    <button class="secondary-button" type="button" id="saveScanNameButton" disabled>저장</button>
+                  </div>
+                  <p class="scan-name-editor-status" id="scanNameSaveStatus">IP를 선택하면 장치명을 저장할 수 있습니다.</p>
                 </div>
 
                 <div class="detail-actions">

@@ -32,7 +32,7 @@ const state = {
 };
 
 const DEFAULT_RANGE = {
-  startIp: "10.73.78.2",
+  startIp: "10.73.78.1",
   endIp: "10.73.78.254",
 };
 
@@ -109,7 +109,13 @@ const elements = {
   cancelScanButton: document.getElementById("cancelScanButton"),
   defaultRangeButton: document.getElementById("defaultRangeButton"),
   clearButton: document.getElementById("clearButton"),
-  copyJsonButton: document.getElementById("copyJsonButton"),
+  scanCsvMenu: document.getElementById("scanCsvMenu"),
+  scanCsvButton: document.getElementById("scanCsvButton"),
+  scanCsvPanel: document.getElementById("scanCsvPanel"),
+  scanCsvExportButton: document.getElementById("scanCsvExportButton"),
+  scanCsvTemplateButton: document.getElementById("scanCsvTemplateButton"),
+  scanCsvUploadButton: document.getElementById("scanCsvUploadButton"),
+  scanNameImportInput: document.getElementById("scanNameImportInput"),
   copySelectedButton: document.getElementById("copySelectedButton"),
   lanUrlBox: document.getElementById("lanUrlBox"),
   jobStatusPill: document.getElementById("jobStatusPill"),
@@ -130,6 +136,9 @@ const elements = {
   detailMac: document.getElementById("detailMac"),
   detailLatency: document.getElementById("detailLatency"),
   detailReportedAt: document.getElementById("detailReportedAt"),
+  detailCustomNameInput: document.getElementById("detailCustomNameInput"),
+  saveScanNameButton: document.getElementById("saveScanNameButton"),
+  scanNameSaveStatus: document.getElementById("scanNameSaveStatus"),
   resultSearchInput: document.getElementById("resultSearchInput"),
   resultMetaText: document.getElementById("resultMetaText"),
   filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
@@ -573,6 +582,46 @@ function buildCsvValue(value) {
   return text;
 }
 
+function parseCsvRows(csvText) {
+  const rows = [];
+  let row = [];
+  let value = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < csvText.length; index += 1) {
+    const char = csvText[index];
+    const nextChar = csvText[index + 1];
+
+    if (char === '"' && inQuotes && nextChar === '"') {
+      value += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      row.push(value);
+      value = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        index += 1;
+      }
+      row.push(value);
+      if (row.some((cell) => cell.trim())) {
+        rows.push(row);
+      }
+      row = [];
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+
+  row.push(value);
+  if (row.some((cell) => cell.trim())) {
+    rows.push(row);
+  }
+  return rows;
+}
+
 function toDeviceCsv(items) {
   const rows = [DEVICE_FIELD_HEADERS, ...items.map((item) => [
     item.management_no,
@@ -598,25 +647,37 @@ function toScanResultsCsv(items) {
   const rows = [[
     "IP",
     "상태",
+    "저장 장치명",
     "장치명",
     "응답여부",
     "이름 출처",
     "MAC",
+    "충돌 MAC",
     "응답 시간(ms)",
     "메모",
     "마지막 보고",
   ], ...items.map((item) => [
     item.ip,
     statusLabelFromValue(item.status),
+    item.custom_name || "",
     scanResultDisplayName(item),
     item.reachable ? "응답 있음" : "응답 없음",
     item.hostname_source || "",
     item.mac_address || "",
+    Array.isArray(item.conflict_mac_addresses) ? item.conflict_mac_addresses.join(" / ") : "",
     item.latency_ms != null ? String(item.latency_ms) : "",
     item.note || "",
     formatTime(item.reported_at),
   ])];
 
+  return rows.map((row) => row.map(buildCsvValue).join(",")).join("\n");
+}
+
+function toScanNameTemplateCsv(items = []) {
+  const rows = [["IP", "저장 장치명"], ...items.map((item) => [
+    item.ip,
+    item.custom_name || "",
+  ])];
   return rows.map((row) => row.map(buildCsvValue).join(",")).join("\n");
 }
 
@@ -777,6 +838,7 @@ function updateSummary(summary = {}) {
 }
 
 function statusLabelFromValue(status) {
+  if (status === "conflict") return "IP 충돌 의심";
   if (status === "healthy") return "응답";
   if (status === "warning") return "응답 / 이름 미해결";
   if (status === "offline") return "미응답";
@@ -785,6 +847,7 @@ function statusLabelFromValue(status) {
 }
 
 function statusClassFromValue(status) {
+  if (status === "conflict") return "danger";
   if (status === "healthy") return "healthy";
   if (status === "warning") return "warning";
   if (status === "offline") return "offline";
@@ -835,8 +898,10 @@ function applyFilter(results) {
       const haystack = [
         item.ip,
         item.hostname,
+        item.custom_name,
         item.hostname_source,
         item.mac_address,
+        Array.isArray(item.conflict_mac_addresses) ? item.conflict_mac_addresses.join(" ") : "",
         item.note,
         item.status,
       ]
@@ -863,7 +928,7 @@ function compareIpAddress(leftIp, rightIp) {
   return 0;
 }
 
-function renderResults(results) {
+function renderResults(results, preferredIp = state.selectedResult?.ip || "") {
   state.rawResults = Array.isArray(results) ? [...results] : [];
   const filtered = applyFilter(state.rawResults);
   state.currentResults = filtered;
@@ -911,10 +976,11 @@ function renderResults(results) {
   });
 
   if (filtered.length > 0) {
-    selectResult(filtered[0]);
-    const firstRow = elements.resultsTableBody.querySelector("tr[data-index]");
-    if (firstRow) {
-      firstRow.classList.add("selected");
+    const selectedIndex = Math.max(0, filtered.findIndex((item) => item.ip === preferredIp));
+    selectResult(filtered[selectedIndex]);
+    const selectedRow = elements.resultsTableBody.querySelector(`tr[data-index="${selectedIndex}"]`);
+    if (selectedRow) {
+      selectedRow.classList.add("selected");
     }
   }
 }
@@ -932,6 +998,10 @@ function selectResult(result) {
   elements.detailMac.textContent = result.mac_address || "-";
   elements.detailLatency.textContent = result.latency_ms != null ? `${result.latency_ms} ms` : "-";
   elements.detailReportedAt.textContent = formatTime(result.reported_at);
+  elements.detailCustomNameInput.value = result.custom_name || "";
+  elements.detailCustomNameInput.disabled = false;
+  elements.saveScanNameButton.disabled = false;
+  elements.scanNameSaveStatus.textContent = "장치명을 입력한 뒤 저장하면 다음 스캔에도 유지됩니다.";
 }
 
 function scanResultDisplayName(result, suffix = "") {
@@ -939,7 +1009,7 @@ function scanResultDisplayName(result, suffix = "") {
     return `응답 없음${suffix}`;
   }
 
-  return result.hostname || `이름 미해결${suffix}`;
+  return result.custom_name || result.hostname || `이름 미해결${suffix}`;
 }
 
 function resetDetailPanel() {
@@ -955,6 +1025,39 @@ function resetDetailPanel() {
   elements.detailMac.textContent = "-";
   elements.detailLatency.textContent = "-";
   elements.detailReportedAt.textContent = "-";
+  elements.detailCustomNameInput.value = "";
+  elements.detailCustomNameInput.disabled = true;
+  elements.saveScanNameButton.disabled = true;
+  elements.scanNameSaveStatus.textContent = "IP를 선택하면 장치명을 저장할 수 있습니다.";
+}
+
+async function saveSelectedScanName() {
+  const selected = state.selectedResult;
+  if (!selected?.ip) {
+    return;
+  }
+
+  const name = elements.detailCustomNameInput.value.trim();
+  elements.saveScanNameButton.disabled = true;
+  elements.scanNameSaveStatus.textContent = "장치명을 저장하는 중입니다.";
+
+  try {
+    const updated = await fetchJson("/api/scan-device-names", {
+      method: "PATCH",
+      body: JSON.stringify({ ip: selected.ip, name }),
+    });
+    state.rawResults = state.rawResults.map((item) => (
+      item.ip === updated.ip ? { ...item, custom_name: updated.name } : item
+    ));
+    renderResults(state.rawResults, updated.ip);
+    elements.scanNameSaveStatus.textContent = updated.name
+      ? "저장했습니다. 다음 스캔에도 이 장치명이 표시됩니다."
+      : "저장된 장치명을 비웠습니다.";
+  } catch (error) {
+    elements.scanNameSaveStatus.textContent = error.message || "장치명 저장에 실패했습니다.";
+  } finally {
+    elements.saveScanNameButton.disabled = false;
+  }
 }
 
 async function fetchJson(url, options = {}) {
@@ -1164,16 +1267,17 @@ function clearResults() {
 }
 
 async function copyAllResults() {
-  if (!state.currentResults.length) {
+  if (!state.rawResults.length) {
     elements.progressText.textContent = "다운로드할 스캔 결과가 없습니다.";
     return;
   }
 
   try {
-    const csvText = toScanResultsCsv(state.currentResults);
+    const csvText = toScanResultsCsv(state.rawResults);
     const filename = `ip_scan_results_${new Date().toISOString().slice(0, 10)}.csv`;
     downloadTextFile(filename, `\uFEFF${csvText}`, "text/csv;charset=utf-8");
-    elements.progressText.textContent = "현재 필터 기준 결과를 CSV로 다운로드했습니다.";
+    setCsvMenuOpen("scan", false);
+    elements.progressText.textContent = "현재 스캔 결과 전체를 CSV로 다운로드했습니다.";
   } catch {
     elements.progressText.textContent = "CSV 다운로드에 실패했습니다.";
   }
@@ -1727,18 +1831,97 @@ async function deleteSelectedAccounts() {
 }
 
 function setCsvMenuOpen(kind, open) {
-  const menu = kind === "account"
-    ? { button: elements.accountCsvButton, panel: elements.accountCsvPanel }
-    : { button: elements.deviceImportButton, panel: elements.deviceCsvPanel };
+  const menuMap = {
+    scan: { button: elements.scanCsvButton, panel: elements.scanCsvPanel },
+    account: { button: elements.accountCsvButton, panel: elements.accountCsvPanel },
+    device: { button: elements.deviceImportButton, panel: elements.deviceCsvPanel },
+  };
+  const menu = menuMap[kind];
+  if (!menu) {
+    return;
+  }
 
   menu.panel.classList.toggle("is-hidden", !open);
   menu.button.setAttribute("aria-expanded", String(open));
 }
 
 function toggleCsvMenu(kind) {
-  const panel = kind === "account" ? elements.accountCsvPanel : elements.deviceCsvPanel;
+  const panelMap = {
+    scan: elements.scanCsvPanel,
+    account: elements.accountCsvPanel,
+    device: elements.deviceCsvPanel,
+  };
+  const panel = panelMap[kind];
+  if (!panel) {
+    return;
+  }
   setCsvMenuOpen(kind, panel.classList.contains("is-hidden"));
-  setCsvMenuOpen(kind === "account" ? "device" : "account", false);
+  ["scan", "account", "device"].filter((item) => item !== kind).forEach((item) => {
+    setCsvMenuOpen(item, false);
+  });
+}
+
+function downloadScanCsvTemplate() {
+  const csvText = toScanNameTemplateCsv(state.rawResults);
+  const filename = `ip_scan_name_template_${new Date().toISOString().slice(0, 10)}.csv`;
+  downloadTextFile(filename, `\uFEFF${csvText}`, "text/csv;charset=utf-8");
+  setCsvMenuOpen("scan", false);
+  elements.progressText.textContent = "IP별 저장 장치명 CSV 양식을 다운로드했습니다.";
+}
+
+function openScanNameCsvImport() {
+  setCsvMenuOpen("scan", false);
+  elements.scanNameImportInput.click();
+}
+
+async function importScanNameCsv(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    return;
+  }
+
+  const csvText = await file.text();
+  if (!csvText.trim()) {
+    elements.progressText.textContent = "빈 CSV 파일은 업로드할 수 없습니다.";
+    event.target.value = "";
+    return;
+  }
+
+  try {
+    const rows = parseCsvRows(csvText.replace(/^\uFEFF/, ""));
+    const [headers = [], ...records] = rows;
+    const normalizedHeaders = headers.map((header) => normalizeText(header).toLowerCase());
+    const ipIndex = normalizedHeaders.findIndex((header) => ["ip", "ip주소", "ip 주소"].includes(header));
+    const nameIndex = normalizedHeaders.findIndex((header) => ["저장 장치명", "장치명", "이름", "name", "custom_name"].includes(header));
+
+    if (ipIndex < 0 || nameIndex < 0) {
+      throw new Error("CSV에는 IP와 저장 장치명 열이 있어야 합니다.");
+    }
+
+    let updatedCount = 0;
+    for (const record of records) {
+      const ip = normalizeText(record[ipIndex]);
+      if (!ip) {
+        continue;
+      }
+      const name = normalizeText(record[nameIndex]);
+      const updated = await fetchJson("/api/scan-device-names", {
+        method: "PATCH",
+        body: JSON.stringify({ ip, name }),
+      });
+      state.rawResults = state.rawResults.map((item) => (
+        item.ip === updated.ip ? { ...item, custom_name: updated.name } : item
+      ));
+      updatedCount += 1;
+    }
+
+    renderResults(state.rawResults);
+    elements.progressText.textContent = `IP 저장 장치명 ${updatedCount}건을 반영했습니다.`;
+  } catch (error) {
+    elements.progressText.textContent = error.message || "IP 장치명 CSV 업로드에 실패했습니다.";
+  } finally {
+    event.target.value = "";
+  }
 }
 
 async function downloadAccountCsvTemplate() {
@@ -2409,7 +2592,15 @@ elements.scanForm.addEventListener("submit", startScan);
 elements.cancelScanButton.addEventListener("click", cancelScan);
 elements.defaultRangeButton.addEventListener("click", () => applyDefaultRange());
 elements.clearButton.addEventListener("click", clearResults);
-elements.copyJsonButton.addEventListener("click", copyAllResults);
+elements.scanCsvButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleCsvMenu("scan");
+});
+elements.scanCsvExportButton.addEventListener("click", copyAllResults);
+elements.scanCsvTemplateButton.addEventListener("click", downloadScanCsvTemplate);
+elements.scanCsvUploadButton.addEventListener("click", openScanNameCsvImport);
+elements.scanNameImportInput.addEventListener("change", importScanNameCsv);
+elements.saveScanNameButton.addEventListener("click", saveSelectedScanName);
 elements.copySelectedButton.addEventListener("click", copySelectedResult);
 elements.resultSearchInput.addEventListener("input", handleResultSearch);
 elements.filterButtons.forEach((button) => {
@@ -2482,6 +2673,9 @@ elements.deviceImageModal.addEventListener("click", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  if (!elements.scanCsvMenu.contains(event.target)) {
+    setCsvMenuOpen("scan", false);
+  }
   if (!elements.accountCsvMenu.contains(event.target)) {
     setCsvMenuOpen("account", false);
   }
@@ -2492,6 +2686,7 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    setCsvMenuOpen("scan", false);
     setCsvMenuOpen("account", false);
     setCsvMenuOpen("device", false);
   }
