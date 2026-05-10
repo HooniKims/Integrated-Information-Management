@@ -1,9 +1,26 @@
 import unittest
 import tempfile
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
 import scanner
+
+
+class CommandEncodingTests(unittest.TestCase):
+    def test_run_command_decodes_korean_windows_command_output(self) -> None:
+        raw_output = "교무실PC\n".encode("cp949")
+
+        def fake_run(command, **kwargs):
+            if kwargs.get("text"):
+                decoded = raw_output.decode(kwargs.get("encoding") or "utf-8", kwargs.get("errors") or "strict")
+                return subprocess.CompletedProcess(command, 0, stdout=decoded, stderr="")
+            return subprocess.CompletedProcess(command, 0, stdout=raw_output, stderr=b"")
+
+        with patch("scanner.subprocess.run", side_effect=fake_run):
+            output = scanner.run_command(["nbtstat", "-A", "10.73.78.51"], timeout_seconds=2.5)
+
+        self.assertIn("교무실PC", output)
 
 
 class NetbiosResolutionTests(unittest.TestCase):

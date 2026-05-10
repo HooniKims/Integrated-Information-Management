@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import locale
 import platform
 import re
 import socket
@@ -77,13 +78,31 @@ def run_command(command: list[str], timeout_seconds: float) -> str:
     completed = subprocess.run(
         command,
         capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="ignore",
         timeout=timeout_seconds,
         check=False,
     )
-    return (completed.stdout or "") + (completed.stderr or "")
+    return decode_command_output(completed.stdout) + decode_command_output(completed.stderr)
+
+
+def decode_command_output(output: bytes | str | None) -> str:
+    if not output:
+        return ""
+    if isinstance(output, str):
+        return output
+
+    encodings = ["utf-8", locale.getpreferredencoding(False), "cp949", "mbcs"]
+    seen: set[str] = set()
+    for encoding in encodings:
+        normalized = encoding.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        try:
+            return output.decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            continue
+
+    return output.decode("utf-8", errors="replace")
 
 
 def normalize_mac_address(value: str) -> str:
