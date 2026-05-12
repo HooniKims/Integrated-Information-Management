@@ -60,7 +60,7 @@ const VIEW_META = {
   "site-accounts": {
     label: "사이트 계정 관리",
     contextLabel: "내부 관리",
-    contextValue: () => "사이트, 설명, URL, ID, 비밀번호, 비고를 한 화면에서 수정합니다.",
+    contextValue: () => "과학 정보부 업무 관련 사이트의 계정 정보를 확인할 수 있습니다.",
     sidebar: "사이트, 설명, URL, ID, PW, 비고를 같은 화면에서 관리합니다.",
   },
   "coming-soon": {
@@ -72,13 +72,13 @@ const VIEW_META = {
   "device-inventory": {
     label: "기기 자산 관리",
     contextLabel: "자산 현황",
-    contextValue: () => "설치장소, 형태, 사양, 상태, 사용자, 제품이미지를 한 화면에서 관리합니다.",
+    contextValue: () => "과학정보부에서 관리중인 기기리스트를 확인할 수 있습니다.",
     sidebar: "기기관리대장은 분류 필터, 수정 저장, 이미지 보기, 서식 적용 보고서 다운로드를 제공합니다.",
   },
   settings: {
     label: "설정 준비",
     contextLabel: "다음 단계",
-    contextValue: () => "포트, 기본 범위, 권한 정책은 이후 설정 화면으로 분리할 수 있습니다.",
+    contextValue: () => "추후 추가할 기능들",
     sidebar: "현재는 IP 스캔과 사이트 계정 관리가 실제로 동작하는 상태입니다.",
   },
 };
