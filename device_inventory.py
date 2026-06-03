@@ -15,7 +15,22 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 
-EXPECTED_LIFE_CYCLE_YEARS = 5
+DEFAULT_LIFE_CYCLE_YEARS = 5
+DEVICE_TYPE_LIFE_CYCLE_YEARS = {
+    "데스크톱": 5,
+    "노트북": 6,
+    "전자칠판": 7,
+    "태블릿": 5,
+}
+ASSET_GROUP_LIFE_CYCLE_YEARS = {
+    "교원용PC": 5,
+    "정보교과실PC": 5,
+    "디벗": 5,
+    "전자칠판": 7,
+    "태블릿(교무실)": 5,
+    "태블릿(과학실)": 5,
+    "진로상담실PC": 5,
+}
 
 BG_PAGE = "F5F7FA"
 BG_SURFACE = "FFFFFF"
@@ -538,9 +553,9 @@ class DeviceInventoryRepository:
                 sheet.cell(row=start_row + row_offset, column=column_index, value=value)
 
         end_row = start_row + max(len(devices), 0)
-        self._apply_inventory_table_style(sheet, start_row=start_row, end_row=end_row)
+        self._apply_inventory_table_style(sheet, devices, start_row=start_row, end_row=end_row)
 
-    def _apply_inventory_table_style(self, sheet, *, start_row: int, end_row: int) -> None:
+    def _apply_inventory_table_style(self, sheet, devices: list[dict], *, start_row: int, end_row: int) -> None:
         header_fill = PatternFill(fill_type="solid", fgColor=BG_SUBTLE)
         zebra_fill = PatternFill(fill_type="solid", fgColor=BG_PAGE)
         thin_border = self._build_thin_border()
@@ -569,7 +584,9 @@ class DeviceInventoryRepository:
                 usage_years = int(usage_cell.value)
             except (TypeError, ValueError):
                 usage_years = None
-            if usage_years is not None and usage_years >= EXPECTED_LIFE_CYCLE_YEARS:
+            device = devices[row_index - start_row - 1] if row_index - start_row - 1 < len(devices) else {}
+            expected_life_cycle_years = self._expected_life_cycle_years(device)
+            if usage_years is not None and usage_years >= expected_life_cycle_years:
                 usage_cell.fill = PatternFill(fill_type="solid", fgColor=WARNING_SOFT)
                 usage_cell.font = Font(bold=True, color=WARNING)
 
@@ -677,6 +694,7 @@ class DeviceInventoryRepository:
     def _serialize_device(self, device: dict) -> dict:
         introduced_date = device.get("introduced_date", "")
         usage_years = self._calculate_usage_years(introduced_date)
+        expected_life_cycle_years = self._expected_life_cycle_years(device)
         status = device.get("status", "")
         return {
             "id": device["id"],
@@ -697,9 +715,19 @@ class DeviceInventoryRepository:
             "created_at": device.get("created_at", ""),
             "updated_at": device.get("updated_at", ""),
             "usage_years": usage_years,
-            "life_cycle_due": usage_years is not None and usage_years >= EXPECTED_LIFE_CYCLE_YEARS,
+            "expected_life_cycle_years": expected_life_cycle_years,
+            "life_cycle_due": usage_years is not None and usage_years >= expected_life_cycle_years,
             "repair_or_inspection_needed": status in {"수리중", "점검 필요", "점검중"},
         }
+
+    def _expected_life_cycle_years(self, device: dict) -> int:
+        device_type = self._normalize_text(device.get("device_type"))
+        asset_group = self._normalize_text(device.get("asset_group"))
+        return (
+            DEVICE_TYPE_LIFE_CYCLE_YEARS.get(device_type)
+            or ASSET_GROUP_LIFE_CYCLE_YEARS.get(asset_group)
+            or DEFAULT_LIFE_CYCLE_YEARS
+        )
 
     def _device_to_csv_row(self, device: dict) -> dict:
         return {

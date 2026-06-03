@@ -60,6 +60,81 @@ class DeviceInventoryDateTestCase(unittest.TestCase):
 
         self.assertEqual(device["usage_years"], 5)
 
+    def test_notebook_life_cycle_due_uses_six_year_threshold(self) -> None:
+        self.repository.upsert_device(
+            {
+                "management_no": "A-004",
+                "device_type": "노트북",
+                "introduced_date": "2020. 07.",
+            }
+        )
+        self.repository.upsert_device(
+            {
+                "management_no": "A-005",
+                "device_type": "노트북",
+                "introduced_date": "2020. 06.",
+            }
+        )
+
+        with patch("device_inventory._today", return_value=date(2026, 6, 4)):
+            five_year_notebook = self.repository.get_device("A-004")
+            six_year_notebook = self.repository.get_device("A-005")
+
+        self.assertEqual(five_year_notebook["usage_years"], 5)
+        self.assertFalse(five_year_notebook["life_cycle_due"])
+        self.assertEqual(six_year_notebook["usage_years"], 6)
+        self.assertTrue(six_year_notebook["life_cycle_due"])
+
+    def test_electronic_whiteboard_life_cycle_due_uses_seven_year_threshold(self) -> None:
+        self.repository.upsert_device(
+            {
+                "management_no": "A-006",
+                "device_type": "전자칠판",
+                "introduced_date": "2019. 07.",
+            }
+        )
+        self.repository.upsert_device(
+            {
+                "management_no": "A-007",
+                "device_type": "전자칠판",
+                "introduced_date": "2019. 06.",
+            }
+        )
+
+        with patch("device_inventory._today", return_value=date(2026, 6, 4)):
+            six_year_whiteboard = self.repository.get_device("A-006")
+            seven_year_whiteboard = self.repository.get_device("A-007")
+
+        self.assertEqual(six_year_whiteboard["usage_years"], 6)
+        self.assertFalse(six_year_whiteboard["life_cycle_due"])
+        self.assertEqual(seven_year_whiteboard["usage_years"], 7)
+        self.assertTrue(seven_year_whiteboard["life_cycle_due"])
+
+    def test_tablet_and_desktop_life_cycle_due_use_five_year_threshold(self) -> None:
+        self.repository.upsert_device(
+            {
+                "management_no": "A-008",
+                "device_type": "태블릿",
+                "introduced_date": "2021. 06.",
+            }
+        )
+        self.repository.upsert_device(
+            {
+                "management_no": "A-009",
+                "device_type": "데스크톱",
+                "introduced_date": "2021. 06.",
+            }
+        )
+
+        with patch("device_inventory._today", return_value=date(2026, 6, 4)):
+            tablet = self.repository.get_device("A-008")
+            desktop = self.repository.get_device("A-009")
+
+        self.assertEqual(tablet["usage_years"], 5)
+        self.assertTrue(tablet["life_cycle_due"])
+        self.assertEqual(desktop["usage_years"], 5)
+        self.assertTrue(desktop["life_cycle_due"])
+
 
 if __name__ == "__main__":
     unittest.main()
