@@ -47,6 +47,16 @@ class DeviceInventoryDateTestCase(unittest.TestCase):
 
         self.assertEqual(device["introduced_date"], "2020. 01.")
 
+    def test_dash_year_month_input_is_normalized_to_csv_year_month_format(self) -> None:
+        device, _ = self.repository.upsert_device(
+            {
+                "management_no": "A-002-1",
+                "introduced_date": "2026-06",
+            }
+        )
+
+        self.assertEqual(device["introduced_date"], "2026. 06.")
+
     def test_usage_years_are_calculated_from_year_month(self) -> None:
         self.repository.upsert_device(
             {

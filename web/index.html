@@ -664,7 +664,7 @@
                     <label class="field-block"><span>시리얼넘버</span><input type="text" id="deviceSerialNumberInput" name="serial_number" /></label>
                     <label class="field-block"><span>CPU</span><input type="text" id="deviceCpuInput" name="cpu" /></label>
                     <label class="field-block"><span>RAM</span><input type="text" id="deviceRamInput" name="ram" /></label>
-                    <label class="field-block"><span>구입시기</span><input type="text" id="deviceAcquiredAtInput" name="acquired_at" inputmode="numeric" pattern="\d{4}\.\s?\d{2}\." placeholder="2020. 01." /></label>
+                    <label class="field-block"><span>구입시기</span><input type="text" id="deviceAcquiredAtInput" name="acquired_at" inputmode="numeric" pattern="\d{4}([.-]\s?\d{2}\.?|\s?\.\s?\d{2}\.)" placeholder="2026-06 또는 2026. 06." /></label>
                     <label class="field-block"><span>상태</span><select id="deviceStatusInput" name="status"></select></label>
                     <label class="field-block"><span>사용자명</span><input type="text" id="deviceUserInput" name="assigned_user" /></label>
                     <label class="field-block field-span-2"><span>제품이미지 URL</span><input type="url" id="deviceImageInput" name="image_url" placeholder="https://example.com/device-photo.jpg 또는 /assets/device-photo.jpg" /></label>
