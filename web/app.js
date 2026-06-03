@@ -508,19 +508,13 @@ function formatDeviceAge(device) {
 }
 
 function calculateDeviceAge(acquiredAt) {
-  if (!acquiredAt) {
-    return "-";
-  }
-  const parsed = new Date(acquiredAt);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseDeviceYearMonth(acquiredAt);
+  if (!parsed) {
     return "-";
   }
 
   const now = new Date();
-  let months = (now.getFullYear() - parsed.getFullYear()) * 12 + (now.getMonth() - parsed.getMonth());
-  if (now.getDate() < parsed.getDate()) {
-    months -= 1;
-  }
+  const months = (now.getFullYear() - parsed.year) * 12 + (now.getMonth() + 1 - parsed.month);
   if (months < 0) {
     return "-";
   }
@@ -533,34 +527,39 @@ function calculateDeviceAge(acquiredAt) {
 }
 
 function formatDeviceDate(value) {
-  const text = normalizeText(value);
-  if (!text) {
-    return "-";
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return text;
-  }
-  const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) {
-    return text;
-  }
-  return parsed.toLocaleDateString("ko-KR");
+  return formatDeviceMonth(value);
 }
 
 function formatDeviceMonth(value) {
+  const formatted = normalizeDeviceMonthInput(value);
+  return formatted || "-";
+}
+
+function normalizeDeviceMonthInput(value) {
+  const parsed = parseDeviceYearMonth(value);
+  if (!parsed) {
+    return normalizeText(value);
+  }
+  return `${parsed.year}. ${String(parsed.month).padStart(2, "0")}.`;
+}
+
+function parseDeviceYearMonth(value) {
   const text = normalizeText(value);
   if (!text) {
-    return "-";
+    return null;
   }
-  const directMatch = text.match(/^(\d{4})[-./](\d{1,2})/);
-  if (directMatch) {
-    return `${directMatch[1]}-${directMatch[2].padStart(2, "0")}`;
+  const directMatch = text.match(/^(\d{4})\s*[-./]\s*(\d{1,2})(?:\s*[-./]\s*\d{1,2})?\.?$/);
+  if (!directMatch) {
+    return null;
   }
-  const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) {
-    return text;
+  const month = Number(directMatch[2]);
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    return null;
   }
-  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
+  return {
+    year: Number(directMatch[1]),
+    month,
+  };
 }
 
 function formatDeviceEventTime(value) {
@@ -2333,7 +2332,7 @@ function showDeviceEditor(mode, device = null) {
   elements.deviceSerialNumberInput.value = device?.serial_number || "";
   elements.deviceCpuInput.value = device?.cpu || "";
   elements.deviceRamInput.value = device?.ram || "";
-  elements.deviceAcquiredAtInput.value = device?.acquired_at || "";
+  elements.deviceAcquiredAtInput.value = device?.acquired_at ? formatDeviceMonth(device.acquired_at) : "";
   elements.deviceStatusInput.value = device?.status || getDeviceMetadata().statuses?.[0]?.value || "";
   elements.deviceUserInput.value = device?.assigned_user || "";
   elements.deviceImageInput.value = device?.image_url || "";
@@ -2356,7 +2355,7 @@ function buildDevicePayload() {
     serial_no: elements.deviceSerialNumberInput.value.trim(),
     cpu: elements.deviceCpuInput.value.trim(),
     ram: elements.deviceRamInput.value.trim(),
-    introduced_date: elements.deviceAcquiredAtInput.value,
+    introduced_date: normalizeDeviceMonthInput(elements.deviceAcquiredAtInput.value),
     status: elements.deviceStatusInput.value.trim(),
     user_name: elements.deviceUserInput.value.trim(),
     image_url: elements.deviceImageInput.value.trim(),

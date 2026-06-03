@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import threading
 import uuid
 from datetime import date, datetime, timezone
@@ -814,14 +815,14 @@ class DeviceInventoryRepository:
     def _calculate_usage_years(self, introduced_date: str) -> int | None:
         if not introduced_date:
             return None
-        try:
-            start = date.fromisoformat(introduced_date)
-        except ValueError:
+        start_month = self._parse_introduced_month(introduced_date)
+        if start_month is None:
             return None
 
         current = _today()
-        years = current.year - start.year
-        if (current.month, current.day) < (start.month, start.day):
+        start_year, start_month_value = start_month
+        years = current.year - start_year
+        if current.month < start_month_value:
             years -= 1
         return max(years, 0)
 
@@ -831,15 +832,37 @@ class DeviceInventoryRepository:
             return ""
 
         raw = raw.split("T", 1)[0].strip()
+        year_month = self._parse_introduced_month(raw)
+        if year_month is not None:
+            year, month = year_month
+            return f"{year:04d}. {month:02d}."
+
         for pattern in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d"):
             try:
-                return datetime.strptime(raw, pattern).date().isoformat()
+                parsed = datetime.strptime(raw, pattern).date()
+                return f"{parsed.year:04d}. {parsed.month:02d}."
             except ValueError:
                 continue
         try:
-            return date.fromisoformat(raw).isoformat()
+            parsed = date.fromisoformat(raw)
+            return f"{parsed.year:04d}. {parsed.month:02d}."
         except ValueError as exc:
             raise ValueError(f"날짜 형식이 올바르지 않습니다: {raw}") from exc
+
+    def _parse_introduced_month(self, value: object) -> tuple[int, int] | None:
+        raw = self._normalize_text(value)
+        if not raw:
+            return None
+
+        match = re.fullmatch(r"(\d{4})\s*[./-]\s*(\d{1,2})(?:\s*[./-]\s*\d{1,2})?\.?", raw)
+        if not match:
+            return None
+
+        year = int(match.group(1))
+        month = int(match.group(2))
+        if not 1 <= month <= 12:
+            return None
+        return year, month
 
     def _normalize_text(self, value: object) -> str:
         return str(value or "").strip()
