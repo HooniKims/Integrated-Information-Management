@@ -87,6 +87,12 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         self.assertIn("loadPasswordItems", script)
         self.assertIn("savePasswordItem", script)
 
+    def test_password_manager_displays_saved_password_values(self) -> None:
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('const displayValue = value || "-"', script)
+        self.assertNotIn('const displayValue = value ? "••••" : "-"', script)
+
 
 if __name__ == "__main__":
     unittest.main()

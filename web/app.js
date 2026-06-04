@@ -2105,7 +2105,7 @@ function getSelectedPasswordItem() {
 function renderPasswordCopyButton(item, variant = "table") {
   const value = normalizeCredentialValue(item?.password);
   const label = item?.title || "선택된 비밀번호";
-  const displayValue = value ? "••••" : "-";
+  const displayValue = value || "-";
   const buttonClass = [
     "credential-copy-button",
     variant === "detail" ? "credential-copy-button--detail" : "",
