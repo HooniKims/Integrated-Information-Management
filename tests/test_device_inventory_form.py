@@ -155,6 +155,8 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         self.assertIn("scanSummaryCards", script)
         self.assertIn("activateScanSummaryFilter", script)
         self.assertIn("setScanSummaryActive", script)
+        self.assertIn('state.currentFilter === "reachable"', script)
+        self.assertIn("next = next.filter((item) => item.reachable)", script)
 
 
 if __name__ == "__main__":

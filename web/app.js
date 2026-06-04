@@ -1006,7 +1006,7 @@ function applyFilter(results) {
   let next = [...results];
 
   if (state.currentFilter === "reachable") {
-    next = next.filter((item) => getScanDisplayStatus(item) === "healthy");
+    next = next.filter((item) => item.reachable);
   } else if (state.currentFilter === "offline") {
     next = next.filter((item) => getScanDisplayStatus(item) === "offline");
   } else if (state.currentFilter === "unresolved") {
