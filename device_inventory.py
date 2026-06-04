@@ -265,8 +265,10 @@ class DeviceInventoryRepository:
             raise ValueError("CSV 헤더를 읽을 수 없습니다.")
 
         created_count = 0
+        updated_count = 0
         skipped_count = 0
         processed_items: list[dict] = []
+        updated_items: list[dict] = []
         skipped_items: list[dict] = []
 
         for row in reader:
@@ -275,21 +277,29 @@ class DeviceInventoryRepository:
             payload = self._payload_from_csv_row(row)
             if not any(payload.values()):
                 continue
-            device, created = self.create_device_if_new(payload)
-            if created:
+            management_no = self._normalize_text(payload.get("management_no"))
+            if not management_no:
+                continue
+            try:
+                device = self.update_device(management_no, payload)
+                updated_items.append(device)
+                updated_count += 1
+            except KeyError:
+                device, created = self.create_device_if_new(payload)
+                if not created:
+                    skipped_items.append(device)
+                    skipped_count += 1
+                    continue
                 processed_items.append(device)
                 created_count += 1
-            else:
-                skipped_items.append(device)
-                skipped_count += 1
 
         return {
-            "row_count": len(processed_items),
+            "row_count": len(processed_items) + len(updated_items),
             "created": created_count,
-            "updated": 0,
+            "updated": updated_count,
             "skipped": skipped_count,
-            "upserted": created_count,
-            "items": processed_items,
+            "upserted": created_count + updated_count,
+            "items": processed_items + updated_items,
             "skipped_items": skipped_items,
         }
 

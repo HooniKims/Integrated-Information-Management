@@ -2543,7 +2543,7 @@ async function importDeviceCsv(event) {
     });
     state.selectedDeviceIds.clear();
     await loadDeviceInventory();
-    setDeviceFeedback(`CSV 업로드 완료: 신규 ${result.created || 0}건, 중복 제외 ${result.skipped || 0}건`, {
+    setDeviceFeedback(`CSV 업로드 완료: 신규 ${result.created || 0}건, 수정 ${result.updated || 0}건, 중복 제외 ${result.skipped || 0}건`, {
       visible: true,
       autoHideMs: 2600,
     });
