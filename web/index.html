@@ -742,38 +742,20 @@
                         <input type="checkbox" id="selectAllDevicesCheckbox" aria-label="현재 기기 목록 전체 선택" />
                       </th>
                       <th>연번</th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="location">설치장소 <span data-sort-indicator="location"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="device_type">형태 <span data-sort-indicator="device_type"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="manufacturer">제조회사 <span data-sort-indicator="manufacturer"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="model_name">모델명 <span data-sort-indicator="model_name"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="serial_number">시리얼넘버 <span data-sort-indicator="serial_number"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="cpu">CPU <span data-sort-indicator="cpu"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="ram">RAM <span data-sort-indicator="ram"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="acquired_at">구입시기 <span data-sort-indicator="acquired_at"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="usage_years">사용연수 <span data-sort-indicator="usage_years"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="status">상태 <span data-sort-indicator="status"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="note">비고 <span data-sort-indicator="note"></span></button></th>
-                      <th><button class="table-sort-button" type="button" data-device-sort="assigned_user">사용자명 <span data-sort-indicator="assigned_user"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="location">설치장소 <span data-sort-indicator="location"></span><span data-filter-indicator="location"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="device_type">형태 <span data-sort-indicator="device_type"></span><span data-filter-indicator="device_type"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="manufacturer">제조회사 <span data-sort-indicator="manufacturer"></span><span data-filter-indicator="manufacturer"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="model_name">모델명 <span data-sort-indicator="model_name"></span><span data-filter-indicator="model_name"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="serial_number">시리얼넘버 <span data-sort-indicator="serial_number"></span><span data-filter-indicator="serial_number"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="cpu">CPU <span data-sort-indicator="cpu"></span><span data-filter-indicator="cpu"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="ram">RAM <span data-sort-indicator="ram"></span><span data-filter-indicator="ram"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="acquired_at">구입시기 <span data-sort-indicator="acquired_at"></span><span data-filter-indicator="acquired_at"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="usage_years">사용연수 <span data-sort-indicator="usage_years"></span><span data-filter-indicator="usage_years"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="status">상태 <span data-sort-indicator="status"></span><span data-filter-indicator="status"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="note">비고 <span data-sort-indicator="note"></span><span data-filter-indicator="note"></span></button></th>
+                      <th><button class="table-filter-button" type="button" data-device-filter-menu="assigned_user">사용자명 <span data-sort-indicator="assigned_user"></span><span data-filter-indicator="assigned_user"></span></button></th>
                       <th>제품이미지</th>
                       <th>작업</th>
-                    </tr>
-                    <tr class="device-filter-row">
-                      <th></th>
-                      <th></th>
-                      <th><input type="text" data-device-column-filter="location" aria-label="설치장소 필터" /></th>
-                      <th><input type="text" data-device-column-filter="device_type" aria-label="형태 필터" /></th>
-                      <th><input type="text" data-device-column-filter="manufacturer" aria-label="제조회사 필터" /></th>
-                      <th><input type="text" data-device-column-filter="model_name" aria-label="모델명 필터" /></th>
-                      <th><input type="text" data-device-column-filter="serial_number" aria-label="시리얼넘버 필터" /></th>
-                      <th><input type="text" data-device-column-filter="cpu" aria-label="CPU 필터" /></th>
-                      <th><input type="text" data-device-column-filter="ram" aria-label="RAM 필터" /></th>
-                      <th><input type="text" data-device-column-filter="acquired_at" aria-label="구입시기 필터" /></th>
-                      <th><input type="text" data-device-column-filter="usage_years" aria-label="사용연수 필터" /></th>
-                      <th><input type="text" data-device-column-filter="status" aria-label="상태 필터" /></th>
-                      <th><input type="text" data-device-column-filter="note" aria-label="비고 필터" /></th>
-                      <th><input type="text" data-device-column-filter="assigned_user" aria-label="사용자명 필터" /></th>
-                      <th></th>
-                      <th></th>
                     </tr>
                   </thead>
                   <tbody id="deviceInventoryTableBody">
@@ -782,6 +764,7 @@
                     </tr>
                   </tbody>
                 </table>
+                <div class="device-column-filter-menu is-hidden" id="deviceColumnFilterMenu"></div>
               </div>
               <div class="inline-editor-block">
                 <div id="deviceDetailView">

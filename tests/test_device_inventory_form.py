@@ -31,15 +31,18 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         self.assertIn("data-device-edit", script)
         self.assertIn("showDeviceEditor(\"edit\", device", script)
 
-    def test_device_table_has_column_filters_and_sort_buttons(self) -> None:
+    def test_device_table_has_excel_style_column_filter_menus(self) -> None:
         html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
         script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
 
-        self.assertIn("data-device-column-filter", html)
-        self.assertIn("data-device-sort", html)
+        self.assertIn("data-device-filter-menu", html)
+        self.assertNotIn("data-device-column-filter", html)
+        self.assertNotIn("device-filter-row", html)
         self.assertIn("clearDeviceColumnFiltersButton", script)
         self.assertIn("deviceColumnFilters", script)
         self.assertIn("deviceSort", script)
+        self.assertIn("renderDeviceColumnFilterMenu", script)
+        self.assertIn("applyDeviceColumnFilterSelection", script)
 
     def test_confirm_needed_status_is_available_and_styled(self) -> None:
         script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")

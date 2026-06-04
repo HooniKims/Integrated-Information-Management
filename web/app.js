@@ -33,6 +33,7 @@ const state = {
   deviceEditorMode: "detail",
   deviceSummaryFilter: "all",
   deviceColumnFilters: {},
+  deviceFilterMenuKey: null,
   deviceSort: {
     key: "acquired_at",
     direction: "asc",
@@ -260,9 +261,10 @@ const elements = {
   deleteSelectedDevicesButton: document.getElementById("deleteSelectedDevicesButton"),
   clearDeviceColumnFiltersButton: document.getElementById("clearDeviceColumnFiltersButton"),
   selectAllDevicesCheckbox: document.getElementById("selectAllDevicesCheckbox"),
-  deviceColumnFilterInputs: Array.from(document.querySelectorAll("[data-device-column-filter]")),
-  deviceSortButtons: Array.from(document.querySelectorAll("[data-device-sort]")),
+  deviceFilterMenuButtons: Array.from(document.querySelectorAll("[data-device-filter-menu]")),
   deviceSortIndicators: Array.from(document.querySelectorAll("[data-sort-indicator]")),
+  deviceFilterIndicators: Array.from(document.querySelectorAll("[data-filter-indicator]")),
+  deviceColumnFilterMenu: document.getElementById("deviceColumnFilterMenu"),
   deviceSummaryCards: Array.from(document.querySelectorAll("[data-device-summary-filter]")),
   deviceFilterButtons: Array.from(document.querySelectorAll("[data-device-filter]")),
   deviceTotalValue: document.getElementById("deviceTotalValue"),
@@ -2513,8 +2515,8 @@ function compareDeviceColumnValues(left, right, key) {
 }
 
 function updateDeviceSortControls() {
-  elements.deviceSortButtons.forEach((button) => {
-    const isActive = button.dataset.deviceSort === state.deviceSort.key;
+  elements.deviceFilterMenuButtons.forEach((button) => {
+    const isActive = button.dataset.deviceFilterMenu === state.deviceSort.key;
     button.classList.toggle("active", isActive);
     button.setAttribute(
       "aria-sort",
@@ -2525,6 +2527,10 @@ function updateDeviceSortControls() {
     indicator.textContent = indicator.dataset.sortIndicator === state.deviceSort.key
       ? (state.deviceSort.direction === "asc" ? "▲" : "▼")
       : "";
+  });
+  elements.deviceFilterIndicators.forEach((indicator) => {
+    const values = state.deviceColumnFilters[indicator.dataset.filterIndicator];
+    indicator.textContent = values instanceof Set && values.size ? "●" : "";
   });
 }
 
@@ -2586,11 +2592,10 @@ function applyDeviceFilter(devices) {
   }
 
   Object.entries(state.deviceColumnFilters).forEach(([key, value]) => {
-    const filterValue = normalizeText(value).toLowerCase();
-    if (!filterValue) {
+    if (!(value instanceof Set) || value.size === 0) {
       return;
     }
-    next = next.filter((item) => String(getDeviceColumnValue(item, key)).toLowerCase().includes(filterValue));
+    next = next.filter((item) => value.has(String(getDeviceColumnValue(item, key)) || "-"));
   });
 
   next.sort((left, right) => {
@@ -2742,7 +2747,7 @@ function renderDeviceInventory() {
   updateDeviceSortControls();
   updateDeviceSummaryCards();
   const sortDirectionText = state.deviceSort.direction === "asc" ? "오름차순" : "내림차순";
-  const activeColumnFilterCount = Object.values(state.deviceColumnFilters).filter((value) => normalizeText(value)).length;
+  const activeColumnFilterCount = Object.values(state.deviceColumnFilters).filter((value) => value instanceof Set && value.size).length;
   elements.deviceResultMeta.textContent = `정렬: ${sortDirectionText} / 열 필터 ${activeColumnFilterCount}개 / 현재 ${filtered.length}건`;
 
   const selectedInFiltered = filtered.find((item) => item.id === state.selectedDeviceId);
@@ -2861,30 +2866,134 @@ function handleDeviceSearch() {
   renderDeviceInventory();
 }
 
-function handleDeviceColumnFilter(event) {
-  state.deviceColumnFilters[event.target.dataset.deviceColumnFilter] = event.target.value || "";
+function getDeviceColumnFilterValues(key) {
+  return Array.from(
+    new Set(state.deviceInventory.map((item) => String(getDeviceColumnValue(item, key)) || "-")),
+  ).sort((left, right) => left.localeCompare(right, "ko-KR", { sensitivity: "base", numeric: true }));
+}
+
+function closeDeviceColumnFilterMenu() {
+  state.deviceFilterMenuKey = null;
+  elements.deviceColumnFilterMenu.classList.add("is-hidden");
+  elements.deviceColumnFilterMenu.innerHTML = "";
+  elements.deviceFilterMenuButtons.forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
+}
+
+function renderDeviceColumnFilterMenu(key, anchorButton) {
+  state.deviceFilterMenuKey = key;
+  const values = getDeviceColumnFilterValues(key);
+  const selectedValues = state.deviceColumnFilters[key] instanceof Set
+    ? state.deviceColumnFilters[key]
+    : new Set(values);
+  const allChecked = values.length > 0 && values.every((value) => selectedValues.has(value));
+  const menuId = `device-column-filter-${key}`;
+
+  elements.deviceColumnFilterMenu.innerHTML = `
+    <div class="device-filter-menu-head">
+      <strong>${escapeHtml(anchorButton.textContent.replace(/[▲▼●]/g, "").trim())}</strong>
+      <button class="ghost-button" type="button" data-device-filter-close>닫기</button>
+    </div>
+    <div class="device-filter-sort-actions">
+      <button class="secondary-button" type="button" data-device-menu-sort="asc">오름차순 정렬</button>
+      <button class="secondary-button" type="button" data-device-menu-sort="desc">내림차순 정렬</button>
+    </div>
+    <label class="device-filter-option device-filter-option-all">
+      <input type="checkbox" data-device-filter-select-all ${allChecked ? "checked" : ""} />
+      <span>전체 선택</span>
+    </label>
+    <div class="device-filter-options" id="${menuId}">
+      ${values.map((value) => `
+        <label class="device-filter-option">
+          <input type="checkbox" data-device-filter-value="${escapeHtml(value)}" ${selectedValues.has(value) ? "checked" : ""} />
+          <span>${escapeHtml(value)}</span>
+        </label>
+      `).join("") || '<div class="device-filter-empty">선택할 값이 없습니다.</div>'}
+    </div>
+    <div class="device-filter-menu-actions">
+      <button class="secondary-button" type="button" data-device-filter-reset>초기화</button>
+      <button class="primary-button" type="button" data-device-filter-apply>적용</button>
+    </div>
+  `;
+
+  elements.deviceColumnFilterMenu.classList.remove("is-hidden");
+  elements.deviceFilterMenuButtons.forEach((button) => {
+    button.setAttribute("aria-expanded", String(button === anchorButton));
+  });
+
+  const headerRect = anchorButton.getBoundingClientRect();
+  const panelRect = anchorButton.closest(".panel-body").getBoundingClientRect();
+  elements.deviceColumnFilterMenu.style.left = `${Math.max(8, headerRect.left - panelRect.left)}px`;
+  elements.deviceColumnFilterMenu.style.top = `${headerRect.bottom - panelRect.top + 6}px`;
+
+  const selectAll = elements.deviceColumnFilterMenu.querySelector("[data-device-filter-select-all]");
+  const valueInputs = Array.from(elements.deviceColumnFilterMenu.querySelectorAll("[data-device-filter-value]"));
+  selectAll?.addEventListener("change", () => {
+    valueInputs.forEach((input) => {
+      input.checked = selectAll.checked;
+    });
+  });
+  valueInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      const checkedCount = valueInputs.filter((target) => target.checked).length;
+      selectAll.checked = checkedCount === valueInputs.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < valueInputs.length;
+    });
+  });
+  elements.deviceColumnFilterMenu.querySelector("[data-device-filter-close]")?.addEventListener("click", closeDeviceColumnFilterMenu);
+  elements.deviceColumnFilterMenu.querySelector("[data-device-filter-reset]")?.addEventListener("click", () => {
+    delete state.deviceColumnFilters[key];
+    closeDeviceColumnFilterMenu();
+    renderDeviceInventory();
+  });
+  elements.deviceColumnFilterMenu.querySelector("[data-device-filter-apply]")?.addEventListener("click", () => {
+    applyDeviceColumnFilterSelection(key);
+  });
+  elements.deviceColumnFilterMenu.querySelectorAll("[data-device-menu-sort]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.deviceSort = {
+        key,
+        direction: button.dataset.deviceMenuSort,
+      };
+      closeDeviceColumnFilterMenu();
+      renderDeviceInventory();
+    });
+  });
+}
+
+function applyDeviceColumnFilterSelection(key) {
+  const values = getDeviceColumnFilterValues(key);
+  const selected = new Set(
+    Array.from(elements.deviceColumnFilterMenu.querySelectorAll("[data-device-filter-value]"))
+      .filter((input) => input.checked)
+      .map((input) => input.dataset.deviceFilterValue || "-"),
+  );
+  if (selected.size === 0 || selected.size === values.length) {
+    delete state.deviceColumnFilters[key];
+  } else {
+    state.deviceColumnFilters[key] = selected;
+  }
+  closeDeviceColumnFilterMenu();
   renderDeviceInventory();
 }
 
 function clearDeviceColumnFilters() {
   state.deviceColumnFilters = {};
-  elements.deviceColumnFilterInputs.forEach((input) => {
-    input.value = "";
-  });
+  closeDeviceColumnFilterMenu();
   renderDeviceInventory();
 }
 
-function toggleDeviceSort(button) {
-  const key = button.dataset.deviceSort;
-  if (state.deviceSort.key === key) {
-    state.deviceSort.direction = state.deviceSort.direction === "asc" ? "desc" : "asc";
-  } else {
-    state.deviceSort = {
-      key,
-      direction: "asc",
-    };
+function toggleDeviceColumnFilterMenu(button) {
+  const key = button.dataset.deviceFilterMenu;
+  if (!key) {
+    return;
   }
-  renderDeviceInventory();
+  if (state.deviceFilterMenuKey === key && !elements.deviceColumnFilterMenu.classList.contains("is-hidden")) {
+    closeDeviceColumnFilterMenu();
+    return;
+  }
+  renderDeviceColumnFilterMenu(key, button);
 }
 
 function showDeviceEditor(mode, device = null, options = {}) {
@@ -3278,11 +3387,11 @@ elements.cancelPasswordEditButton.addEventListener("click", hidePasswordEditor);
 elements.refreshDevicesButton.addEventListener("click", handleRefreshDevices);
 elements.newDeviceButton.addEventListener("click", () => showDeviceEditor("create", null, { scrollIntoView: true }));
 elements.deviceSearchInput.addEventListener("input", handleDeviceSearch);
-elements.deviceColumnFilterInputs.forEach((input) => {
-  input.addEventListener("input", handleDeviceColumnFilter);
-});
-elements.deviceSortButtons.forEach((button) => {
-  button.addEventListener("click", () => toggleDeviceSort(button));
+elements.deviceFilterMenuButtons.forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleDeviceColumnFilterMenu(button);
+  });
 });
 elements.deviceSummaryCards.forEach((card) => {
   card.addEventListener("click", () => activateDeviceSummaryFilter(card));
@@ -3339,6 +3448,12 @@ document.addEventListener("click", (event) => {
   if (!elements.deviceCsvMenu.contains(event.target)) {
     setCsvMenuOpen("device", false);
   }
+  if (
+    !elements.deviceColumnFilterMenu.contains(event.target)
+    && !event.target.closest("[data-device-filter-menu]")
+  ) {
+    closeDeviceColumnFilterMenu();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
@@ -3346,6 +3461,7 @@ document.addEventListener("keydown", (event) => {
     setCsvMenuOpen("scan", false);
     setCsvMenuOpen("account", false);
     setCsvMenuOpen("device", false);
+    closeDeviceColumnFilterMenu();
   }
   if (event.key === "Escape" && !elements.deviceImageModal.classList.contains("is-hidden")) {
     closeDeviceImageModal();

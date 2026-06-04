@@ -1191,7 +1191,11 @@ th {
   text-transform: uppercase;
 }
 
-.table-sort-button {
+.panel-body {
+  position: relative;
+}
+
+.table-filter-button {
   width: 100%;
   min-height: 2rem;
   display: inline-flex;
@@ -1206,32 +1210,94 @@ th {
   cursor: pointer;
 }
 
-.table-sort-button:hover,
-.table-sort-button.active {
+.table-filter-button:hover,
+.table-filter-button.active {
   color: var(--accent-primary);
 }
 
-.device-filter-row th {
-  padding: 0.35rem 0.35rem 0.5rem;
+.table-filter-button [data-filter-indicator] {
+  color: var(--warning);
+  font-size: 0.62rem;
+}
+
+.device-column-filter-menu {
+  position: absolute;
+  z-index: 20;
+  width: min(18rem, calc(100vw - 2rem));
+  max-height: 24rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  box-shadow: 0 1rem 2.25rem rgba(21, 32, 43, 0.18);
+  display: grid;
+  gap: 0.65rem;
+}
+
+.device-filter-menu-head,
+.device-filter-menu-actions,
+.device-filter-sort-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.device-filter-menu-head,
+.device-filter-menu-actions {
+  justify-content: space-between;
+}
+
+.device-filter-sort-actions {
+  align-items: stretch;
+}
+
+.device-filter-sort-actions .secondary-button {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 0.55rem;
+  font-size: 0.78rem;
+}
+
+.device-filter-options {
+  max-height: 12rem;
+  overflow: auto;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line-default);
+  border-radius: 0.55rem;
   background: #f8fafc;
 }
 
-.device-filter-row input {
-  width: 100%;
-  min-width: 0;
-  height: 2rem;
-  padding: 0.35rem 0.45rem;
-  border: 1px solid var(--line-default);
-  border-radius: 0.45rem;
-  background: var(--bg-surface);
+.device-filter-option {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  min-height: 1.9rem;
   color: var(--text-primary);
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.84rem;
+  font-weight: 650;
 }
 
-.device-filter-row input:focus {
-  outline: 2px solid rgba(31, 78, 121, 0.2);
-  border-color: var(--accent-primary);
+.device-filter-option input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent-primary);
+}
+
+.device-filter-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.device-filter-option-all {
+  padding-inline: 0.25rem;
+}
+
+.device-filter-empty {
+  padding: 0.7rem;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 tbody tr {
