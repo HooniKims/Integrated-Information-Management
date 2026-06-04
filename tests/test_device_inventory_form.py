@@ -17,13 +17,14 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         pattern = match.group(1)
         self.assertRegex("2026-06", re.compile(f"^(?:{pattern})$"))
 
-    def test_each_view_has_top_button(self) -> None:
+    def test_app_has_single_floating_top_button(self) -> None:
         html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        view_count = len(re.findall(r'<section class="view-panel(?: active)?" data-view-panel=', html))
+        styles = (PROJECT_ROOT / "web" / "styles.css").read_text(encoding="utf-8")
         top_button_count = html.count('data-scroll-top-button')
 
-        self.assertGreaterEqual(view_count, 1)
-        self.assertEqual(top_button_count, view_count)
+        self.assertEqual(top_button_count, 1)
+        self.assertIn("floating-top-button", html)
+        self.assertIn("position: fixed", styles)
 
     def test_device_table_renders_direct_edit_action(self) -> None:
         script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
