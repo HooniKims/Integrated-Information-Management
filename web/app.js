@@ -144,6 +144,7 @@ const elements = {
   detailAssignedUser: document.getElementById("detailAssignedUser"),
   detailHostnameSource: document.getElementById("detailHostnameSource"),
   detailMac: document.getElementById("detailMac"),
+  detailConflictMac: document.getElementById("detailConflictMac"),
   detailLatency: document.getElementById("detailLatency"),
   detailReportedAt: document.getElementById("detailReportedAt"),
   scanAssignedUserInput: document.getElementById("scanAssignedUserInput"),
@@ -248,6 +249,9 @@ const elements = {
   deviceCsvTemplateButton: document.getElementById("deviceCsvTemplateButton"),
   deviceCsvUploadButton: document.getElementById("deviceCsvUploadButton"),
   deviceReportButton: document.getElementById("deviceReportButton"),
+  deviceReportProgress: document.getElementById("deviceReportProgress"),
+  deviceReportProgressText: document.getElementById("deviceReportProgressText"),
+  deviceReportProgressFill: document.getElementById("deviceReportProgressFill"),
   deviceImportInput: document.getElementById("deviceImportInput"),
   deviceFeedbackText: document.getElementById("deviceFeedbackText"),
   deviceSelectionCount: document.getElementById("deviceSelectionCount"),
@@ -720,7 +724,7 @@ function toScanResultsCsv(items) {
     "마지막 보고",
   ], ...items.map((item) => [
     item.ip,
-    statusLabelFromValue(item.status),
+    statusLabelFromValue(item),
     item.assigned_user || "",
     item.custom_name || "",
     scanResultDisplayName(item),
@@ -939,6 +943,38 @@ function statusClassFromValue(status) {
   return "neutral";
 }
 
+function getScanDisplayStatus(item) {
+  if (item?.conflict_detected || item?.status === "conflict") {
+    return "conflict";
+  }
+  if (!item?.reachable) {
+    return "offline";
+  }
+  if (item.hostname || item.custom_name) {
+    return "healthy";
+  }
+  return "warning";
+}
+
+function statusLabelFromValue(statusOrItem) {
+  const status = typeof statusOrItem === "object" ? getScanDisplayStatus(statusOrItem) : statusOrItem;
+  if (status === "conflict") return "IP 충돌";
+  if (status === "healthy") return "접속";
+  if (status === "warning") return "확인 필요";
+  if (status === "offline") return "미접속";
+  if (status === "failed") return "실패";
+  return "대기";
+}
+
+function statusClassFromValue(statusOrItem) {
+  const status = typeof statusOrItem === "object" ? getScanDisplayStatus(statusOrItem) : statusOrItem;
+  if (status === "conflict") return "danger";
+  if (status === "healthy") return "healthy";
+  if (status === "warning") return "warning";
+  if (status === "offline") return "offline";
+  return "neutral";
+}
+
 function setJobState(snapshot) {
   const statusMap = {
     queued: "대기열 등록",
@@ -968,11 +1004,13 @@ function applyFilter(results) {
   let next = [...results];
 
   if (state.currentFilter === "reachable") {
-    next = next.filter((item) => item.reachable);
+    next = next.filter((item) => getScanDisplayStatus(item) === "healthy");
   } else if (state.currentFilter === "offline") {
-    next = next.filter((item) => !item.reachable);
+    next = next.filter((item) => getScanDisplayStatus(item) === "offline");
   } else if (state.currentFilter === "unresolved") {
-    next = next.filter((item) => item.reachable && !item.hostname);
+    next = next.filter((item) => getScanDisplayStatus(item) === "warning");
+  } else if (state.currentFilter === "conflict") {
+    next = next.filter((item) => getScanDisplayStatus(item) === "conflict");
   } else if (state.currentFilter === "has-mac") {
     next = next.filter((item) => Boolean(item.mac_address));
   } else if (state.currentFilter === "missing-user") {
@@ -1038,7 +1076,7 @@ function renderResults(results, preferredIp = state.selectedResult?.ip || "") {
       (item, index) => `
         <tr data-index="${index}">
           <td><span class="mono">${escapeHtml(item.ip)}</span></td>
-          <td><span class="status ${statusClassFromValue(item.status)}">${statusLabelFromValue(item.status)}</span></td>
+          <td><span class="status ${statusClassFromValue(item)}">${statusLabelFromValue(item)}</span></td>
           <td class="wrap-cell">${escapeHtml(item.assigned_user || "-")}</td>
           <td>
             <div class="primary-cell">
@@ -1079,14 +1117,17 @@ function selectResult(result) {
   state.selectedResult = result;
   elements.copySelectedButton.disabled = false;
   elements.detailDeviceName.textContent = scanResultDisplayName(result, " 장치");
-  elements.detailStatus.textContent = statusLabelFromValue(result.status);
-  elements.detailStatus.className = `status ${statusClassFromValue(result.status)}`;
+  elements.detailStatus.textContent = statusLabelFromValue(result);
+  elements.detailStatus.className = `status ${statusClassFromValue(result)}`;
   elements.detailSummary.textContent = result.manual_note || result.note;
   elements.detailIp.textContent = result.ip;
   elements.detailHostname.textContent = result.hostname || "-";
   elements.detailAssignedUser.textContent = result.assigned_user || "-";
   elements.detailHostnameSource.textContent = result.hostname_source || "-";
   elements.detailMac.textContent = result.mac_address || "-";
+  elements.detailConflictMac.textContent = Array.isArray(result.conflict_mac_addresses) && result.conflict_mac_addresses.length
+    ? result.conflict_mac_addresses.join(" / ")
+    : "-";
   elements.detailLatency.textContent = result.latency_ms != null ? `${result.latency_ms} ms` : "-";
   elements.detailReportedAt.textContent = formatTime(result.last_seen_at || result.reported_at);
   elements.scanAssignedUserInput.value = result.assigned_user || "";
@@ -1120,6 +1161,7 @@ function resetDetailPanel() {
   elements.detailAssignedUser.textContent = "-";
   elements.detailHostnameSource.textContent = "-";
   elements.detailMac.textContent = "-";
+  elements.detailConflictMac.textContent = "-";
   elements.detailLatency.textContent = "-";
   elements.detailReportedAt.textContent = "-";
   elements.scanAssignedUserInput.value = "";
@@ -3362,8 +3404,11 @@ async function importDeviceCsv(event) {
 
 async function downloadDeviceReport() {
   const fallbackName = `기기관리대장_보고서_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  elements.deviceReportButton.disabled = true;
+  setDeviceReportProgress(0, true);
   try {
     const response = await fetch("/api/device-inventory/report-xlsx", { headers: {} });
+    setDeviceReportProgress(35, true);
     if (response.status === 401) {
       const payload = await response.json();
       handleAuthenticationRequired(payload.error || "로그인이 필요합니다.");
@@ -3375,12 +3420,52 @@ async function downloadDeviceReport() {
     const disposition = response.headers.get("content-disposition") || "";
     const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/)?.[1];
     const fileName = encodedName ? decodeURIComponent(encodedName) : fallbackName;
-    const blob = await response.blob();
+    const blob = await readReportResponseBlob(response);
+    setDeviceReportProgress(100, true);
     downloadBlob(fileName, blob);
-    hideDeviceFeedback();
+    setDeviceFeedback("보고서를 다운로드했습니다.", { visible: true, autoHideMs: 2400 });
   } catch (error) {
     setDeviceFeedback(error.message, { visible: true });
+  } finally {
+    elements.deviceReportButton.disabled = false;
+    window.setTimeout(() => {
+      setDeviceReportProgress(0, false);
+    }, 900);
   }
+}
+
+async function readReportResponseBlob(response) {
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (!response.body || !contentLength) {
+    setDeviceReportProgress(70, true);
+    return response.blob();
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    chunks.push(value);
+    received += value.length;
+    const percent = Math.min(95, Math.max(35, Math.round((received / contentLength) * 100)));
+    setDeviceReportProgress(percent, true);
+  }
+
+  return new Blob(chunks, {
+    type: response.headers.get("content-type") || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+}
+
+function setDeviceReportProgress(percent, visible) {
+  const normalizedPercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  elements.deviceReportProgress.classList.toggle("is-hidden", !visible);
+  elements.deviceReportProgressText.textContent = `보고서 생성 ${normalizedPercent}%`;
+  elements.deviceReportProgressFill.style.width = `${normalizedPercent}%`;
 }
 
 async function handleRefreshDevices() {

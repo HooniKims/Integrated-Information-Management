@@ -1940,6 +1940,37 @@ tbody tr.selected {
   white-space: nowrap;
 }
 
+.report-progress {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 10.5rem;
+  align-self: stretch;
+}
+
+.report-progress-row {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.report-progress-bar {
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--line-default);
+}
+
+.report-progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-primary);
+  transition: width 180ms ease-out;
+}
+
 .field-span-2 {
   grid-column: span 2;
 }

@@ -344,6 +344,8 @@ class ScanInventoryRepository:
         "status",
         "note",
         "reported_at",
+        "conflict_detected",
+        "conflict_mac_addresses",
     }
 
     def __init__(self, path: Path) -> None:
@@ -399,6 +401,12 @@ class ScanInventoryRepository:
                     "status": str(result.get("status", "") or ("healthy" if result.get("reachable") else "offline")),
                     "note": str(result.get("note", "") or ""),
                     "reported_at": reported_at,
+                    "conflict_detected": bool(result.get("conflict_detected", False)),
+                    "conflict_mac_addresses": [
+                        str(value)
+                        for value in result.get("conflict_mac_addresses", [])
+                        if str(value or "").strip()
+                    ],
                     "updated_at": now,
                 }
                 if not next_item.get("first_seen_at"):
@@ -465,6 +473,12 @@ class ScanInventoryRepository:
             "latency_ms": item.get("latency_ms"),
             "status": str(item.get("status", "") or "offline"),
             "note": str(item.get("note", "") or ""),
+            "conflict_detected": bool(item.get("conflict_detected", False)),
+            "conflict_mac_addresses": [
+                str(value)
+                for value in item.get("conflict_mac_addresses", [])
+                if str(value or "").strip()
+            ],
             "manual_note": str(item.get("manual_note", "") or ""),
             "reported_at": str(item.get("reported_at", "") or ""),
             "last_seen_at": str(item.get("last_seen_at", "") or ""),

@@ -116,6 +116,32 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         self.assertIn("saveScanInventoryEntry", script)
         self.assertIn("loadScanInventory({ force: true })", script)
 
+    def test_ip_scan_status_labels_and_conflict_filter_are_available(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('data-filter="conflict"', html)
+        self.assertIn("IP 충돌", html)
+        self.assertIn("getScanDisplayStatus", script)
+        self.assertIn('return "접속"', script)
+        self.assertIn('return "미접속"', script)
+        self.assertIn('return "확인 필요"', script)
+        self.assertIn('return "IP 충돌"', script)
+        self.assertIn("conflict_mac_addresses", script)
+
+    def test_device_report_progress_ui_is_available(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("deviceReportProgress", html)
+        self.assertIn("deviceReportProgressFill", html)
+        self.assertIn("deviceReportProgressText", html)
+        self.assertIn("setDeviceReportProgress", script)
+        self.assertIn("보고서 생성 0%", html)
+        self.assertIn("보고서 생성 ${normalizedPercent}%", script)
+        self.assertIn("setDeviceReportProgress(100, true)", script)
+        self.assertIn("elements.deviceReportButton.disabled = true", script)
+
 
 if __name__ == "__main__":
     unittest.main()

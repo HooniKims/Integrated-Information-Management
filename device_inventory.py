@@ -12,6 +12,7 @@ from urllib.parse import unquote
 
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.drawing.image import Image as WorkbookImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -453,14 +454,24 @@ class DeviceInventoryRepository:
         sheet["D8"] = status_summary["점검 필요"]
         sheet["E8"] = "교체 검토"
         sheet["F8"] = status_summary["교체 검토"]
-        sheet["E9"] = "설치장소"
-        sheet["F9"] = "수량"
+        sheet["E9"] = "설치장소 (장비가 배치된 공간)"
+        sheet["F9"] = "수량 (등록 장비 수)"
+        sheet["H5"] = "차트 읽는 법"
+        sheet["H6"] = "설치장소: 장비가 실제로 배치된 공간입니다."
+        sheet["H7"] = "수량: 해당 장소에 등록된 장비 대수입니다."
+        sheet["H8"] = "막대 끝 숫자는 장소별 장비 수량을 뜻합니다."
 
-        for cell_ref in ["A5", "C5", "E5", "A8", "C8", "E8", "E9", "F9"]:
+        for cell_ref in ["A5", "C5", "E5", "A8", "C8", "E8", "E9", "F9", "H5"]:
             sheet[cell_ref].font = Font(bold=True, color=TEXT_PRIMARY)
             sheet[cell_ref].fill = header_fill if cell_ref in {"E9", "F9"} else accent_fill
             sheet[cell_ref].border = strong_border if cell_ref in {"E9", "F9"} else border
             sheet[cell_ref].alignment = Alignment(horizontal="center", vertical="center")
+
+        for cell_ref in ["H6", "H7", "H8"]:
+            sheet[cell_ref].font = Font(color=TEXT_SECONDARY)
+            sheet[cell_ref].fill = surface_fill
+            sheet[cell_ref].border = border
+            sheet[cell_ref].alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
         for cell_ref in ["B5", "D5", "F5", "B8", "D8", "F8"]:
             sheet[cell_ref].font = Font(size=14, bold=True, color=TEXT_PRIMARY)
@@ -515,6 +526,8 @@ class DeviceInventoryRepository:
             chart.add_data(data, titles_from_data=True)
             chart.set_categories(labels)
             chart.varyColors = False
+            chart.dLbls = DataLabelList()
+            chart.dLbls.showVal = True
             if chart.series:
                 chart.series[0].graphicalProperties.solidFill = ACCENT_PRIMARY
                 chart.series[0].graphicalProperties.line.solidFill = ACCENT_PRIMARY

@@ -278,6 +278,51 @@ class ScanInventoryRepositoryTests(unittest.TestCase):
         self.assertEqual(summary["unresolved"], 1)
         self.assertEqual(summary["has_mac"], 1)
 
+    def test_merge_scan_results_persists_conflict_details_and_updates_latest_scan_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = scanner.ScanInventoryRepository(Path(temp_dir) / "scan_inventory.json")
+            repository.merge_scan_results(
+                [
+                    {
+                        "ip": "10.73.78.53",
+                        "reachable": True,
+                        "hostname": "OLD-HOST",
+                        "hostname_source": "netbios",
+                        "mac_address": "00-11-22-33-44-55",
+                        "conflict_detected": False,
+                        "conflict_mac_addresses": [],
+                        "status": "healthy",
+                        "note": "old",
+                        "reported_at": "2026-06-04T01:00:00+00:00",
+                    }
+                ]
+            )
+            repository.merge_scan_results(
+                [
+                    {
+                        "ip": "10.73.78.53",
+                        "reachable": True,
+                        "hostname": "NEW-HOST",
+                        "hostname_source": "nbtscan",
+                        "mac_address": "aa-bb-cc-dd-ee-ff",
+                        "conflict_detected": True,
+                        "conflict_mac_addresses": ["aa-bb-cc-dd-ee-ff", "11-22-33-44-55-66"],
+                        "status": "conflict",
+                        "note": "conflict",
+                        "reported_at": "2026-06-04T02:00:00+00:00",
+                    }
+                ]
+            )
+            item = repository.list_entries()[0]
+
+        self.assertEqual(item["hostname"], "NEW-HOST")
+        self.assertEqual(item["hostname_source"], "nbtscan")
+        self.assertEqual(item["mac_address"], "aa-bb-cc-dd-ee-ff")
+        self.assertTrue(item["conflict_detected"])
+        self.assertEqual(item["conflict_mac_addresses"], ["aa-bb-cc-dd-ee-ff", "11-22-33-44-55-66"])
+        self.assertEqual(item["status"], "conflict")
+        self.assertEqual(item["last_seen_at"], "2026-06-04T02:00:00+00:00")
+
 
 class ScanManagerCompletionTests(unittest.TestCase):
     def test_scan_manager_calls_completion_callback_with_results(self) -> None:

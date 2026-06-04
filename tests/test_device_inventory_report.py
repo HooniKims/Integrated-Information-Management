@@ -122,6 +122,17 @@ class DeviceInventoryReportWorkbookTestCase(unittest.TestCase):
         self.assertEqual(dashboard["D8"].value, 1)
         self.assertEqual(dashboard["F8"].value, 3)
 
+    def test_dashboard_chart_has_readable_labels_and_explanation(self) -> None:
+        dashboard = self.load_report()["대시보드"]
+
+        self.assertIn("차트 읽는 법", dashboard["H5"].value)
+        self.assertIn("설치장소", dashboard["H6"].value)
+        self.assertIn("수량", dashboard["H7"].value)
+        self.assertGreaterEqual(len(dashboard._charts), 1)
+        chart = dashboard._charts[0]
+        self.assertIsNotNone(chart.dLbls)
+        self.assertTrue(chart.dLbls.showVal)
+
     def test_location_sheet_contains_only_matching_rows(self) -> None:
         sheet = self.load_report()["교무실"]
 

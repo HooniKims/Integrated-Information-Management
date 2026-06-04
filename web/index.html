@@ -154,9 +154,10 @@
 
             <div class="filter-row">
               <button class="filter-chip active" type="button" data-filter="all">전체 보기</button>
-              <button class="filter-chip" type="button" data-filter="reachable">응답 장치만</button>
-              <button class="filter-chip" type="button" data-filter="offline">미응답만</button>
-              <button class="filter-chip" type="button" data-filter="unresolved">이름 미해결</button>
+              <button class="filter-chip" type="button" data-filter="reachable">접속</button>
+              <button class="filter-chip" type="button" data-filter="offline">미접속</button>
+              <button class="filter-chip" type="button" data-filter="unresolved">확인 필요</button>
+              <button class="filter-chip" type="button" data-filter="conflict">IP 충돌</button>
               <button class="filter-chip" type="button" data-filter="has-mac">MAC 있음</button>
               <button class="filter-chip" type="button" data-filter="missing-user">사용자 미입력</button>
             </div>
@@ -266,6 +267,10 @@
                   <div class="detail-item">
                     <span class="detail-item-label">MAC</span>
                     <span class="detail-item-value mono" id="detailMac">-</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item-label">충돌 MAC</span>
+                    <span class="detail-item-value mono wrap-text" id="detailConflictMac">-</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-item-label">응답 시간</span>
@@ -676,6 +681,14 @@
                     <button class="secondary-button" type="button" id="deviceCsvExportButton">전체 다운</button>
                     <button class="secondary-button" type="button" id="deviceCsvTemplateButton">양식 다운로드</button>
                     <button class="primary-button" type="button" id="deviceCsvUploadButton">파일 선택</button>
+                  </div>
+                </div>
+                <div class="report-progress is-hidden" id="deviceReportProgress" aria-live="polite">
+                  <div class="report-progress-row">
+                    <span id="deviceReportProgressText">보고서 생성 0%</span>
+                  </div>
+                  <div class="report-progress-bar">
+                    <div class="report-progress-fill" id="deviceReportProgressFill"></div>
                   </div>
                 </div>
                 <button class="secondary-button" type="button" id="deviceReportButton">보고서 다운</button>
