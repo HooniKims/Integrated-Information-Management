@@ -10,6 +10,7 @@ const state = {
   currentResults: [],
   selectedResult: null,
   resultSearchQuery: "",
+  scanInventoryLoaded: false,
   pollTimer: null,
   siteAccounts: [],
   siteAccountFilter: "all",
@@ -140,12 +141,16 @@ const elements = {
   detailSummary: document.getElementById("detailSummary"),
   detailIp: document.getElementById("detailIp"),
   detailHostname: document.getElementById("detailHostname"),
+  detailAssignedUser: document.getElementById("detailAssignedUser"),
   detailHostnameSource: document.getElementById("detailHostnameSource"),
   detailMac: document.getElementById("detailMac"),
   detailLatency: document.getElementById("detailLatency"),
   detailReportedAt: document.getElementById("detailReportedAt"),
+  scanAssignedUserInput: document.getElementById("scanAssignedUserInput"),
   detailCustomNameInput: document.getElementById("detailCustomNameInput"),
+  scanManualNoteInput: document.getElementById("scanManualNoteInput"),
   saveScanNameButton: document.getElementById("saveScanNameButton"),
+  saveScanInventoryButton: document.getElementById("saveScanInventoryButton"),
   scanNameSaveStatus: document.getElementById("scanNameSaveStatus"),
   resultSearchInput: document.getElementById("resultSearchInput"),
   resultMetaText: document.getElementById("resultMetaText"),
@@ -701,6 +706,7 @@ function toScanResultsCsv(items) {
   const rows = [[
     "IP",
     "상태",
+    "사용자/담당자",
     "저장 장치명",
     "장치명",
     "응답여부",
@@ -708,11 +714,14 @@ function toScanResultsCsv(items) {
     "MAC",
     "충돌 MAC",
     "응답 시간(ms)",
-    "메모",
+    "수동 비고",
+    "스캔 메모",
+    "마지막 확인",
     "마지막 보고",
   ], ...items.map((item) => [
     item.ip,
     statusLabelFromValue(item.status),
+    item.assigned_user || "",
     item.custom_name || "",
     scanResultDisplayName(item),
     item.reachable ? "응답 있음" : "응답 없음",
@@ -720,7 +729,9 @@ function toScanResultsCsv(items) {
     item.mac_address || "",
     Array.isArray(item.conflict_mac_addresses) ? item.conflict_mac_addresses.join(" / ") : "",
     item.latency_ms != null ? String(item.latency_ms) : "",
+    item.manual_note || "",
     item.note || "",
+    formatTime(item.last_seen_at),
     formatTime(item.reported_at),
   ])];
 
@@ -867,7 +878,9 @@ function switchView(view) {
   elements.viewPanels.forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === panelView));
   setTopbarForView(panelView);
 
-  if (panelView === "site-accounts") {
+  if (panelView === "ip-scan") {
+    loadScanInventory();
+  } else if (panelView === "site-accounts") {
     loadSiteAccounts();
   } else if (panelView === "password-manager") {
     loadPasswordItems();
@@ -962,6 +975,8 @@ function applyFilter(results) {
     next = next.filter((item) => item.reachable && !item.hostname);
   } else if (state.currentFilter === "has-mac") {
     next = next.filter((item) => Boolean(item.mac_address));
+  } else if (state.currentFilter === "missing-user") {
+    next = next.filter((item) => !item.assigned_user);
   }
 
   const query = state.resultSearchQuery.trim().toLowerCase();
@@ -971,8 +986,10 @@ function applyFilter(results) {
         item.ip,
         item.hostname,
         item.custom_name,
+        item.assigned_user,
         item.hostname_source,
         item.mac_address,
+        item.manual_note,
         Array.isArray(item.conflict_mac_addresses) ? item.conflict_mac_addresses.join(" ") : "",
         item.note,
         item.status,
@@ -1010,7 +1027,7 @@ function renderResults(results, preferredIp = state.selectedResult?.ip || "") {
     resetDetailPanel();
     elements.resultsTableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="empty-cell">조건에 맞는 결과가 없습니다.</td>
+        <td colspan="8" class="empty-cell">조건에 맞는 IP 현황이 없습니다.</td>
       </tr>
     `;
     return;
@@ -1022,6 +1039,7 @@ function renderResults(results, preferredIp = state.selectedResult?.ip || "") {
         <tr data-index="${index}">
           <td><span class="mono">${escapeHtml(item.ip)}</span></td>
           <td><span class="status ${statusClassFromValue(item.status)}">${statusLabelFromValue(item.status)}</span></td>
+          <td class="wrap-cell">${escapeHtml(item.assigned_user || "-")}</td>
           <td>
             <div class="primary-cell">
               <strong>${escapeHtml(scanResultDisplayName(item))}</strong>
@@ -1030,8 +1048,8 @@ function renderResults(results, preferredIp = state.selectedResult?.ip || "") {
           </td>
           <td>${escapeHtml(item.hostname_source || "-")}</td>
           <td><span class="mono">${escapeHtml(item.mac_address || "-")}</span></td>
-          <td>${item.latency_ms != null ? `${escapeHtml(item.latency_ms)} ms` : "-"}</td>
-          <td class="wrap-cell">${escapeHtml(item.note || "-")}</td>
+          <td>${escapeHtml(formatTime(item.last_seen_at || item.reported_at))}</td>
+          <td class="wrap-cell">${escapeHtml(item.manual_note || item.note || "-")}</td>
         </tr>
       `,
     )
@@ -1063,17 +1081,23 @@ function selectResult(result) {
   elements.detailDeviceName.textContent = scanResultDisplayName(result, " 장치");
   elements.detailStatus.textContent = statusLabelFromValue(result.status);
   elements.detailStatus.className = `status ${statusClassFromValue(result.status)}`;
-  elements.detailSummary.textContent = result.note;
+  elements.detailSummary.textContent = result.manual_note || result.note;
   elements.detailIp.textContent = result.ip;
   elements.detailHostname.textContent = result.hostname || "-";
+  elements.detailAssignedUser.textContent = result.assigned_user || "-";
   elements.detailHostnameSource.textContent = result.hostname_source || "-";
   elements.detailMac.textContent = result.mac_address || "-";
   elements.detailLatency.textContent = result.latency_ms != null ? `${result.latency_ms} ms` : "-";
-  elements.detailReportedAt.textContent = formatTime(result.reported_at);
+  elements.detailReportedAt.textContent = formatTime(result.last_seen_at || result.reported_at);
+  elements.scanAssignedUserInput.value = result.assigned_user || "";
+  elements.scanAssignedUserInput.disabled = false;
   elements.detailCustomNameInput.value = result.custom_name || "";
   elements.detailCustomNameInput.disabled = false;
+  elements.scanManualNoteInput.value = result.manual_note || "";
+  elements.scanManualNoteInput.disabled = false;
   elements.saveScanNameButton.disabled = false;
-  elements.scanNameSaveStatus.textContent = "장치명을 입력한 뒤 저장하면 다음 스캔에도 유지됩니다.";
+  elements.saveScanInventoryButton.disabled = false;
+  elements.scanNameSaveStatus.textContent = "사용자/담당자, 장치명, 수동 비고를 저장하면 다음 접속에도 유지됩니다.";
 }
 
 function scanResultDisplayName(result, suffix = "") {
@@ -1093,14 +1117,40 @@ function resetDetailPanel() {
   elements.detailSummary.textContent = "왼쪽 표에서 결과를 선택하면 상세 정보가 표시됩니다.";
   elements.detailIp.textContent = "-";
   elements.detailHostname.textContent = "-";
+  elements.detailAssignedUser.textContent = "-";
   elements.detailHostnameSource.textContent = "-";
   elements.detailMac.textContent = "-";
   elements.detailLatency.textContent = "-";
   elements.detailReportedAt.textContent = "-";
+  elements.scanAssignedUserInput.value = "";
+  elements.scanAssignedUserInput.disabled = true;
   elements.detailCustomNameInput.value = "";
   elements.detailCustomNameInput.disabled = true;
+  elements.scanManualNoteInput.value = "";
+  elements.scanManualNoteInput.disabled = true;
   elements.saveScanNameButton.disabled = true;
+  elements.saveScanInventoryButton.disabled = true;
   elements.scanNameSaveStatus.textContent = "IP를 선택하면 장치명을 저장할 수 있습니다.";
+}
+
+async function loadScanInventory(options = {}) {
+  const { force = false } = options;
+  if (state.scanInventoryLoaded && !force) {
+    return;
+  }
+
+  try {
+    const payload = await fetchJson("/api/scan-inventory", { headers: {} });
+    state.scanInventoryLoaded = true;
+    updateSummary(payload.summary || {});
+    renderResults(payload.items || [], state.selectedResult?.ip || "");
+    elements.jobStatusPill.textContent = "저장 현황";
+    elements.progressText.textContent = "저장된 IP 할당 현황을 표시하고 있습니다.";
+    elements.progressCount.textContent = `${payload.summary?.total ?? 0} / ${payload.summary?.total ?? 0}`;
+    elements.progressFill.style.width = "100%";
+  } catch (error) {
+    elements.progressText.textContent = error.message || "저장된 IP 현황을 불러오지 못했습니다.";
+  }
 }
 
 async function saveSelectedScanName() {
@@ -1128,6 +1178,42 @@ async function saveSelectedScanName() {
   } catch (error) {
     elements.scanNameSaveStatus.textContent = error.message || "장치명 저장에 실패했습니다.";
   } finally {
+    elements.saveScanNameButton.disabled = false;
+  }
+}
+
+async function saveScanInventoryEntry() {
+  const selected = state.selectedResult;
+  if (!selected?.ip) {
+    return;
+  }
+
+  elements.saveScanInventoryButton.disabled = true;
+  elements.saveScanNameButton.disabled = true;
+  elements.scanNameSaveStatus.textContent = "IP 현황을 저장하는 중입니다.";
+
+  try {
+    const updated = await fetchJson(`/api/scan-inventory/${encodeURIComponent(selected.ip)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        assigned_user: elements.scanAssignedUserInput.value.trim(),
+        custom_name: elements.detailCustomNameInput.value.trim(),
+        manual_note: elements.scanManualNoteInput.value.trim(),
+      }),
+    });
+    state.rawResults = state.rawResults.map((item) => (
+      item.ip === updated.ip ? { ...item, ...updated } : item
+    ));
+    if (!state.rawResults.some((item) => item.ip === updated.ip)) {
+      state.rawResults.push(updated);
+    }
+    state.scanInventoryLoaded = true;
+    renderResults(state.rawResults, updated.ip);
+    elements.scanNameSaveStatus.textContent = "IP 현황을 저장했습니다.";
+  } catch (error) {
+    elements.scanNameSaveStatus.textContent = error.message || "IP 현황 저장에 실패했습니다.";
+  } finally {
+    elements.saveScanInventoryButton.disabled = false;
     elements.saveScanNameButton.disabled = false;
   }
 }
@@ -1250,12 +1336,14 @@ async function pollJob() {
     if (snapshot.status === "completed") {
       elements.progressText.textContent = "스캔이 완료되었습니다.";
       stopPolling();
+      loadScanInventory({ force: true });
       return;
     }
 
     if (snapshot.status === "cancelled") {
       elements.progressText.textContent = "스캔이 중지되었습니다.";
       stopPolling();
+      loadScanInventory({ force: true });
       return;
     }
 
@@ -1332,7 +1420,7 @@ function clearResults() {
   resetDetailPanel();
   elements.resultsTableBody.innerHTML = `
     <tr>
-      <td colspan="7" class="empty-cell">스캔을 시작하면 결과가 여기에 표시됩니다.</td>
+      <td colspan="8" class="empty-cell">저장된 IP 현황을 불러오려면 IP 스캔 화면을 다시 열어 주세요.</td>
     </tr>
   `;
   elements.resultMetaText.textContent = "정렬: IP 오름차순";
@@ -3321,6 +3409,7 @@ elements.scanCsvTemplateButton.addEventListener("click", downloadScanCsvTemplate
 elements.scanCsvUploadButton.addEventListener("click", openScanNameCsvImport);
 elements.scanNameImportInput.addEventListener("change", importScanNameCsv);
 elements.saveScanNameButton.addEventListener("click", saveSelectedScanName);
+elements.saveScanInventoryButton.addEventListener("click", saveScanInventoryEntry);
 elements.copySelectedButton.addEventListener("click", copySelectedResult);
 elements.resultSearchInput.addEventListener("input", handleResultSearch);
 elements.filterButtons.forEach((button) => {

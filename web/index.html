@@ -158,6 +158,7 @@
               <button class="filter-chip" type="button" data-filter="offline">미응답만</button>
               <button class="filter-chip" type="button" data-filter="unresolved">이름 미해결</button>
               <button class="filter-chip" type="button" data-filter="has-mac">MAC 있음</button>
+              <button class="filter-chip" type="button" data-filter="missing-user">사용자 미입력</button>
             </div>
 
             <div class="result-search-row">
@@ -215,16 +216,17 @@
                     <tr>
                       <th>IP</th>
                       <th>상태</th>
+                      <th>사용자/담당자</th>
                       <th>장치명</th>
                       <th>이름 출처</th>
                       <th>MAC</th>
-                      <th>응답 시간</th>
+                      <th>마지막 확인</th>
                       <th>메모</th>
                     </tr>
                   </thead>
                   <tbody id="resultsTableBody">
                     <tr>
-                      <td colspan="7" class="empty-cell">스캔을 시작하면 결과가 여기에 표시됩니다.</td>
+                      <td colspan="8" class="empty-cell">저장된 IP 현황을 불러오는 중입니다.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -254,6 +256,10 @@
                     <span class="detail-item-value" id="detailHostname">-</span>
                   </div>
                   <div class="detail-item">
+                    <span class="detail-item-label">사용자/담당자</span>
+                    <span class="detail-item-value" id="detailAssignedUser">-</span>
+                  </div>
+                  <div class="detail-item">
                     <span class="detail-item-label">이름 출처</span>
                     <span class="detail-item-value" id="detailHostnameSource">-</span>
                   </div>
@@ -272,10 +278,15 @@
                 </div>
 
                 <div class="scan-name-editor">
+                  <label for="scanAssignedUserInput">사용자/담당자</label>
+                  <input type="text" id="scanAssignedUserInput" placeholder="예: 과학실, 홍길동, 정보실" disabled />
                   <label for="detailCustomNameInput">저장 장치명</label>
+                  <input type="text" id="detailCustomNameInput" placeholder="예: 교무실 복합기" disabled />
+                  <label for="scanManualNoteInput">수동 비고</label>
+                  <textarea id="scanManualNoteInput" rows="3" placeholder="고정 IP, 담당자, 위치 등" disabled></textarea>
                   <div class="scan-name-editor-row">
-                    <input type="text" id="detailCustomNameInput" placeholder="예: 교무실 복합기" disabled />
-                    <button class="secondary-button" type="button" id="saveScanNameButton" disabled>저장</button>
+                    <button class="secondary-button" type="button" id="saveScanNameButton" disabled>장치명만 저장</button>
+                    <button class="primary-button" type="button" id="saveScanInventoryButton" disabled>IP 현황 저장</button>
                   </div>
                   <p class="scan-name-editor-status" id="scanNameSaveStatus">IP를 선택하면 장치명을 저장할 수 있습니다.</p>
                 </div>

@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from scanner import ScanManager, ScanNameRepository, get_local_host_info
+from scanner import ScanInventoryRepository, ScanManager, ScanNameRepository, get_local_host_info
 from device_inventory import DeviceInventoryRepository
 from password_manager import PasswordItemRepository
 from site_accounts import SiteAccountRepository
@@ -64,7 +64,11 @@ SESSIONS: dict[str, dict[str, str]] = {}
 SESSION_LOCK = threading.Lock()
 
 SCAN_NAME_REPOSITORY = ScanNameRepository(DATA_DIR / "scan_device_names.json")
-SCAN_MANAGER = ScanManager(name_lookup=SCAN_NAME_REPOSITORY.get_name)
+SCAN_INVENTORY_REPOSITORY = ScanInventoryRepository(DATA_DIR / "scan_inventory.json")
+SCAN_MANAGER = ScanManager(
+    name_lookup=SCAN_NAME_REPOSITORY.get_name,
+    completion_callback=SCAN_INVENTORY_REPOSITORY.merge_scan_results,
+)
 SITE_ACCOUNT_REPOSITORY = SiteAccountRepository(DATA_DIR / "site_accounts.json", DATA_DIR / "site_account_audit.json")
 PASSWORD_ITEM_REPOSITORY = PasswordItemRepository(DATA_DIR / "password_items.json")
 DEVICE_INVENTORY_REPOSITORY = DeviceInventoryRepository(
@@ -136,6 +140,15 @@ class AppHandler(BaseHTTPRequestHandler):
 
         if path == "/api/self":
             self._send_json(get_local_host_info())
+            return
+
+        if path == "/api/scan-inventory":
+            self._send_json(
+                {
+                    "items": SCAN_INVENTORY_REPOSITORY.list_entries(),
+                    "summary": SCAN_INVENTORY_REPOSITORY.summarize_entries(),
+                }
+            )
             return
 
         if path == "/api/site-accounts":
@@ -455,6 +468,22 @@ class AppHandler(BaseHTTPRequestHandler):
             except KeyError:
                 self._send_json({"error": "장비를 찾지 못했습니다."}, status=HTTPStatus.NOT_FOUND)
                 return
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                return
+            self._send_json(updated)
+            return
+
+        if path.startswith("/api/scan-inventory/") and path.count("/") == 3:
+            ip = unquote(path.rsplit("/", 1)[-1])
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_json({"error": "Invalid JSON body."}, status=HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                updated = SCAN_INVENTORY_REPOSITORY.update_manual_fields(ip, payload)
+                if "custom_name" in payload:
+                    SCAN_NAME_REPOSITORY.set_name(ip, str(payload.get("custom_name", "") or ""))
             except ValueError as exc:
                 self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
                 return

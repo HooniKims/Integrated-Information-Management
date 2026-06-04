@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 import subprocess
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -150,6 +151,171 @@ class ScanNameRepositoryTests(unittest.TestCase):
         }
 
         self.assertEqual(job.summary()["unresolved"], 0)
+
+
+class ScanInventoryRepositoryTests(unittest.TestCase):
+    def test_merge_scan_results_creates_inventory_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = scanner.ScanInventoryRepository(Path(temp_dir) / "scan_inventory.json")
+
+            result = repository.merge_scan_results(
+                [
+                    {
+                        "ip": "10.73.78.51",
+                        "reachable": True,
+                        "latency_ms": 3,
+                        "custom_name": "Lab PC",
+                        "hostname": "DESKTOP-ABC",
+                        "hostname_source": "netbios",
+                        "mac_address": "00-11-22-33-44-55",
+                        "status": "healthy",
+                        "note": "Host responded",
+                        "reported_at": "2026-06-04T01:00:00+00:00",
+                    }
+                ]
+            )
+            items = repository.list_entries()
+
+        self.assertEqual(result["merged"], 1)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["ip"], "10.73.78.51")
+        self.assertEqual(items[0]["custom_name"], "Lab PC")
+        self.assertEqual(items[0]["assigned_user"], "")
+        self.assertEqual(items[0]["last_seen_at"], "2026-06-04T01:00:00+00:00")
+
+    def test_merge_scan_results_preserves_manual_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = scanner.ScanInventoryRepository(Path(temp_dir) / "scan_inventory.json")
+            repository.merge_scan_results(
+                [
+                    {
+                        "ip": "10.73.78.51",
+                        "reachable": True,
+                        "custom_name": "Lab PC",
+                        "hostname": "OLD",
+                        "hostname_source": "netbios",
+                        "mac_address": "00-11-22-33-44-55",
+                        "status": "healthy",
+                        "note": "old note",
+                        "reported_at": "2026-06-04T01:00:00+00:00",
+                    }
+                ]
+            )
+            repository.update_manual_fields(
+                "10.73.78.51",
+                {
+                    "assigned_user": "Science Lab",
+                    "custom_name": "Teacher PC",
+                    "manual_note": "fixed ip",
+                },
+            )
+
+            repository.merge_scan_results(
+                [
+                    {
+                        "ip": "10.73.78.51",
+                        "reachable": False,
+                        "custom_name": "",
+                        "hostname": "",
+                        "hostname_source": "",
+                        "mac_address": "",
+                        "status": "offline",
+                        "note": "No ping response",
+                        "reported_at": "2026-06-04T02:00:00+00:00",
+                    }
+                ]
+            )
+            item = repository.list_entries()[0]
+
+        self.assertEqual(item["assigned_user"], "Science Lab")
+        self.assertEqual(item["custom_name"], "Teacher PC")
+        self.assertEqual(item["manual_note"], "fixed ip")
+        self.assertEqual(item["status"], "offline")
+        self.assertEqual(item["last_seen_at"], "2026-06-04T01:00:00+00:00")
+
+    def test_malformed_inventory_file_recovers_to_empty_list(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "scan_inventory.json"
+            path.write_text("{not json", encoding="utf-8")
+            repository = scanner.ScanInventoryRepository(path)
+
+            items = repository.list_entries()
+
+        self.assertEqual(items, [])
+
+    def test_scan_inventory_summary_counts_saved_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = scanner.ScanInventoryRepository(Path(temp_dir) / "scan_inventory.json")
+            repository.merge_scan_results(
+                [
+                    {
+                        "ip": "10.73.78.51",
+                        "reachable": True,
+                        "hostname": "",
+                        "custom_name": "",
+                        "mac_address": "",
+                        "status": "warning",
+                        "note": "name missing",
+                        "reported_at": "2026-06-04T01:00:00+00:00",
+                    },
+                    {
+                        "ip": "10.73.78.52",
+                        "reachable": True,
+                        "hostname": "DESKTOP-ABC",
+                        "custom_name": "",
+                        "mac_address": "00-11-22-33-44-55",
+                        "status": "healthy",
+                        "note": "ok",
+                        "reported_at": "2026-06-04T01:00:00+00:00",
+                    },
+                ]
+            )
+
+            summary = repository.summarize_entries()
+
+        self.assertEqual(summary["total"], 2)
+        self.assertEqual(summary["alive"], 2)
+        self.assertEqual(summary["unresolved"], 1)
+        self.assertEqual(summary["has_mac"], 1)
+
+
+class ScanManagerCompletionTests(unittest.TestCase):
+    def test_scan_manager_calls_completion_callback_with_results(self) -> None:
+        captured_results = []
+
+        def fake_probe(ip: str, index: int, custom_name: str = "") -> dict:
+            return {
+                "index": index,
+                "ip": ip,
+                "reachable": True,
+                "latency_ms": 1,
+                "custom_name": custom_name,
+                "hostname": "DESKTOP-ABC",
+                "hostname_source": "netbios",
+                "mac_address": "00-11-22-33-44-55",
+                "conflict_detected": False,
+                "conflict_mac_addresses": [],
+                "status": "healthy",
+                "note": "ok",
+                "reported_at": "2026-06-04T01:00:00+00:00",
+            }
+
+        with patch("scanner.probe_ip", side_effect=fake_probe):
+            manager = scanner.ScanManager(
+                name_lookup=lambda ip: "Lab PC",
+                completion_callback=lambda results: captured_results.extend(results),
+            )
+            job = manager.create_job("10.73.78.51", "10.73.78.51")
+
+            for _ in range(100):
+                snapshot = job.snapshot()
+                if snapshot["status"] == "completed":
+                    break
+                time.sleep(0.01)
+
+        self.assertEqual(len(captured_results), 1)
+        self.assertEqual(captured_results[0]["ip"], "10.73.78.51")
+        self.assertEqual(captured_results[0]["custom_name"], "Lab PC")
 
 
 if __name__ == "__main__":

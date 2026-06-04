@@ -104,6 +104,18 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         self.assertNotIn('data-view-panel="coming-soon"', html)
         self.assertNotIn("coming-soon", script)
 
+    def test_ip_scan_inventory_fields_are_available(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("사용자/담당자", html)
+        self.assertIn("scanAssignedUserInput", html)
+        self.assertIn("scanManualNoteInput", html)
+        self.assertIn("/api/scan-inventory", script)
+        self.assertIn("loadScanInventory", script)
+        self.assertIn("saveScanInventoryEntry", script)
+        self.assertIn("loadScanInventory({ force: true })", script)
+
 
 if __name__ == "__main__":
     unittest.main()

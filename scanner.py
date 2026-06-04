@@ -333,6 +333,153 @@ class ScanNameRepository:
             raise ValueError("Invalid IP address.") from exc
 
 
+class ScanInventoryRepository:
+    MANUAL_FIELDS = {"assigned_user", "custom_name", "manual_note"}
+    SCAN_FIELDS = {
+        "hostname",
+        "hostname_source",
+        "mac_address",
+        "reachable",
+        "latency_ms",
+        "status",
+        "note",
+        "reported_at",
+    }
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+        self._ensure_file()
+
+    def list_entries(self) -> list[dict[str, Any]]:
+        with self._lock:
+            payload = self._read_payload()
+        items = [self._normalize_entry(item) for item in payload.get("items", {}).values()]
+        items.sort(key=lambda item: ipaddress.IPv4Address(item["ip"]))
+        return items
+
+    def summarize_entries(self) -> dict[str, int]:
+        items = self.list_entries()
+        alive = sum(1 for item in items if item.get("reachable"))
+        unresolved = sum(
+            1
+            for item in items
+            if item.get("reachable") and not item.get("hostname") and not item.get("custom_name")
+        )
+        has_mac = sum(1 for item in items if item.get("mac_address"))
+        missing_user = sum(1 for item in items if not item.get("assigned_user"))
+        return {
+            "total": len(items),
+            "completed": len(items),
+            "alive": alive,
+            "unresolved": unresolved,
+            "has_mac": has_mac,
+            "missing_user": missing_user,
+        }
+
+    def merge_scan_results(self, results: list[dict[str, Any]]) -> dict[str, Any]:
+        merged = 0
+        with self._lock:
+            payload = self._read_payload()
+            items = dict(payload.get("items", {}))
+            for result in results:
+                ip = self._normalize_ip(str(result.get("ip", "") or ""))
+                previous = self._normalize_entry(items.get(ip, {"ip": ip}))
+                now = utc_now_iso()
+                reported_at = str(result.get("reported_at") or now)
+
+                next_item = {
+                    **previous,
+                    "ip": ip,
+                    "hostname": str(result.get("hostname", "") or ""),
+                    "hostname_source": str(result.get("hostname_source", "") or ""),
+                    "mac_address": str(result.get("mac_address", "") or ""),
+                    "reachable": bool(result.get("reachable")),
+                    "latency_ms": result.get("latency_ms"),
+                    "status": str(result.get("status", "") or ("healthy" if result.get("reachable") else "offline")),
+                    "note": str(result.get("note", "") or ""),
+                    "reported_at": reported_at,
+                    "updated_at": now,
+                }
+                if not next_item.get("first_seen_at"):
+                    next_item["first_seen_at"] = reported_at
+                if result.get("reachable"):
+                    next_item["last_seen_at"] = reported_at
+                if not previous.get("custom_name") and result.get("custom_name"):
+                    next_item["custom_name"] = str(result.get("custom_name", "") or "")
+
+                items[ip] = self._normalize_entry(next_item)
+                merged += 1
+
+            self._write_payload({"items": items})
+        return {"merged": merged, "summary": self.summarize_entries()}
+
+    def update_manual_fields(self, ip: str, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized_ip = self._normalize_ip(ip)
+        with self._lock:
+            data = self._read_payload()
+            items = dict(data.get("items", {}))
+            item = self._normalize_entry(items.get(normalized_ip, {"ip": normalized_ip}))
+            now = utc_now_iso()
+
+            for field_name in self.MANUAL_FIELDS:
+                if field_name in payload:
+                    item[field_name] = str(payload.get(field_name, "") or "").strip()
+            if not item.get("first_seen_at"):
+                item["first_seen_at"] = now
+            item["updated_at"] = now
+            items[normalized_ip] = self._normalize_entry(item)
+            self._write_payload({"items": items})
+        return items[normalized_ip]
+
+    def _ensure_file(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.path.exists():
+            self._write_payload({"items": {}})
+
+    def _read_payload(self) -> dict[str, Any]:
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {"items": {}}
+        if not isinstance(data, dict) or not isinstance(data.get("items"), dict):
+            return {"items": {}}
+        return data
+
+    def _write_payload(self, payload: dict[str, Any]) -> None:
+        self.path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def _normalize_entry(self, item: dict[str, Any]) -> dict[str, Any]:
+        ip = self._normalize_ip(str(item.get("ip", "") or ""))
+        return {
+            "ip": ip,
+            "assigned_user": str(item.get("assigned_user", "") or ""),
+            "custom_name": str(item.get("custom_name", "") or ""),
+            "hostname": str(item.get("hostname", "") or ""),
+            "hostname_source": str(item.get("hostname_source", "") or ""),
+            "mac_address": str(item.get("mac_address", "") or ""),
+            "reachable": bool(item.get("reachable", False)),
+            "latency_ms": item.get("latency_ms"),
+            "status": str(item.get("status", "") or "offline"),
+            "note": str(item.get("note", "") or ""),
+            "manual_note": str(item.get("manual_note", "") or ""),
+            "reported_at": str(item.get("reported_at", "") or ""),
+            "last_seen_at": str(item.get("last_seen_at", "") or ""),
+            "first_seen_at": str(item.get("first_seen_at", "") or ""),
+            "updated_at": str(item.get("updated_at", "") or ""),
+        }
+
+    @staticmethod
+    def _normalize_ip(ip: str) -> str:
+        try:
+            return str(ipaddress.IPv4Address(str(ip).strip()))
+        except ipaddress.AddressValueError as exc:
+            raise ValueError("Invalid IP address.") from exc
+
+
 @dataclass
 class ScanJob:
     id: str
@@ -393,10 +540,11 @@ class ScanJob:
 
 
 class ScanManager:
-    def __init__(self, name_lookup=None) -> None:
+    def __init__(self, name_lookup=None, completion_callback=None) -> None:
         self._jobs: dict[str, ScanJob] = {}
         self._lock = threading.Lock()
         self._name_lookup = name_lookup or (lambda _ip: "")
+        self._completion_callback = completion_callback
 
     def create_job(self, start_ip: str, end_ip: str) -> ScanJob:
         targets, normalized_start, normalized_end = normalize_ip_range(start_ip, end_ip)
@@ -454,6 +602,9 @@ class ScanManager:
             with job.lock:
                 job.status = "cancelled" if job.cancel_requested else "completed"
                 job.finished_at = utc_now_iso()
+                ordered_results = [job.results[key] for key in sorted(job.results.keys())]
+            if self._completion_callback:
+                self._completion_callback(ordered_results)
         except Exception as exc:  # pragma: no cover - defensive path
             with job.lock:
                 job.status = "failed"
