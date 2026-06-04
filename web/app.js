@@ -82,23 +82,11 @@ const VIEW_META = {
     contextValue: () => "업무 관련실 번호키와 다양한 내부 비밀번호를 빠르게 확인합니다.",
     sidebar: "제목과 비밀번호만 간단하게 저장하고 필요할 때 바로 복사합니다.",
   },
-  "coming-soon": {
-    label: "추가 모듈 준비",
-    contextLabel: "다음 단계",
-    contextValue: () => "설정과 보조 기능은 이후 운영 규칙에 맞춰 추가할 수 있습니다.",
-    sidebar: "현재는 IP 스캔, 사이트 계정 관리, 기기관리대장이 실제로 동작하는 상태입니다.",
-  },
   "device-inventory": {
     label: "기기 자산 관리",
     contextLabel: "자산 현황",
     contextValue: () => "과학정보부에서 관리중인 기기리스트를 확인할 수 있습니다.",
     sidebar: "기기관리대장은 분류 필터, 수정 저장, 이미지 보기, 서식 적용 보고서 다운로드를 제공합니다.",
-  },
-  settings: {
-    label: "설정 준비",
-    contextLabel: "다음 단계",
-    contextValue: () => "추후 추가할 기능들",
-    sidebar: "현재는 IP 스캔과 사이트 계정 관리가 실제로 동작하는 상태입니다.",
   },
 };
 
@@ -872,17 +860,18 @@ async function checkSession() {
 }
 
 function switchView(view) {
-  const panelView = elements.viewPanels.some((panel) => panel.dataset.viewPanel === view) ? view : "coming-soon";
-  state.currentView = view;
-  elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.view === view));
+  const hasPanel = elements.viewPanels.some((panel) => panel.dataset.viewPanel === view);
+  const panelView = hasPanel ? view : "ip-scan";
+  state.currentView = panelView;
+  elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.view === panelView));
   elements.viewPanels.forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === panelView));
-  setTopbarForView(view);
+  setTopbarForView(panelView);
 
-  if (view === "site-accounts") {
+  if (panelView === "site-accounts") {
     loadSiteAccounts();
-  } else if (view === "password-manager") {
+  } else if (panelView === "password-manager") {
     loadPasswordItems();
-  } else if (view === "device-inventory") {
+  } else if (panelView === "device-inventory") {
     loadDeviceInventory();
   }
 }

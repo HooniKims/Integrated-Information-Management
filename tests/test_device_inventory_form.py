@@ -94,6 +94,16 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         self.assertIn('const displayValue = value || "-"', script)
         self.assertNotIn('const displayValue = value ? "••••" : "-"', script)
 
+    def test_settings_navigation_is_removed(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertNotIn('data-view="settings"', html)
+        self.assertNotIn("<span>설정</span>", html)
+        self.assertNotIn("<span class=\"nav-icon\">ST</span>", html)
+        self.assertNotIn('data-view-panel="coming-soon"', html)
+        self.assertNotIn("coming-soon", script)
+
 
 if __name__ == "__main__":
     unittest.main()
