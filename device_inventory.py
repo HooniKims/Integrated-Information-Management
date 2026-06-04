@@ -8,9 +8,11 @@ import threading
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
+from urllib.parse import unquote
 
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
+from openpyxl.drawing.image import Image as WorkbookImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
@@ -82,6 +84,7 @@ class DeviceInventoryRepository:
     statuses = [
         "정상 사용",
         "예비",
+        "확인 필요",
         "점검 필요",
         "점검중",
         "수리중",
@@ -162,9 +165,10 @@ class DeviceInventoryRepository:
         "사용연수": "usage_years",
     }
 
-    def __init__(self, inventory_path: Path, events_path: Path) -> None:
+    def __init__(self, inventory_path: Path, events_path: Path, image_dir: Path | None = None) -> None:
         self.inventory_path = inventory_path
         self.events_path = events_path
+        self.image_dir = image_dir
         self._lock = threading.Lock()
         self._ensure_files()
 
@@ -564,6 +568,7 @@ class DeviceInventoryRepository:
 
         end_row = start_row + max(len(devices), 0)
         self._apply_inventory_table_style(sheet, devices, start_row=start_row, end_row=end_row)
+        self._embed_inventory_images(sheet, devices, start_row=start_row)
 
     def _apply_inventory_table_style(self, sheet, devices: list[dict], *, start_row: int, end_row: int) -> None:
         header_fill = PatternFill(fill_type="solid", fgColor=BG_SUBTLE)
@@ -605,7 +610,7 @@ class DeviceInventoryRepository:
             if status_value == "정상 사용":
                 status_cell.fill = PatternFill(fill_type="solid", fgColor=SUCCESS_SOFT)
                 status_cell.font = Font(bold=True, color=SUCCESS)
-            elif status_value in {"수리중", "점검 필요", "점검중"}:
+            elif status_value in {"확인 필요", "수리중", "점검 필요", "점검중"}:
                 status_cell.fill = PatternFill(fill_type="solid", fgColor=WARNING_SOFT)
                 status_cell.font = Font(bold=True, color=WARNING)
             elif status_value:
@@ -634,6 +639,44 @@ class DeviceInventoryRepository:
         }
         for column_letter, width in widths.items():
             sheet.column_dimensions[column_letter].width = width
+
+    def _embed_inventory_images(self, sheet, devices: list[dict], *, start_row: int) -> None:
+        image_column_index = len(self.csv_headers)
+        image_column_letter = get_column_letter(image_column_index)
+        for row_offset, device in enumerate(devices, start=1):
+            image_path = self._resolve_internal_image_path(device.get("image_url", ""))
+            if image_path is None:
+                continue
+
+            row_index = start_row + row_offset
+            image_cell = sheet.cell(row=row_index, column=image_column_index)
+            image_cell.value = ""
+            sheet.row_dimensions[row_index].height = max(sheet.row_dimensions[row_index].height or 0, 58)
+
+            try:
+                image = WorkbookImage(str(image_path))
+            except Exception:
+                continue
+            image.width = 72
+            image.height = 54
+            sheet.add_image(image, f"{image_column_letter}{row_index}")
+
+    def _resolve_internal_image_path(self, image_url: object) -> Path | None:
+        if self.image_dir is None:
+            return None
+        raw = self._normalize_text(image_url)
+        if not raw.startswith("/device-images/"):
+            return None
+
+        file_name = Path(unquote(raw.rsplit("/", 1)[-1])).name
+        target = (self.image_dir / file_name).resolve()
+        try:
+            target.relative_to(self.image_dir.resolve())
+        except ValueError:
+            return None
+        if not target.exists() or not target.is_file():
+            return None
+        return target
 
     def _build_thin_border(self) -> Border:
         return Border(
@@ -727,7 +770,7 @@ class DeviceInventoryRepository:
             "usage_years": usage_years,
             "expected_life_cycle_years": expected_life_cycle_years,
             "life_cycle_due": usage_years is not None and usage_years >= expected_life_cycle_years,
-            "repair_or_inspection_needed": status in {"수리중", "점검 필요", "점검중"},
+            "repair_or_inspection_needed": status in {"확인 필요", "수리중", "점검 필요", "점검중"},
         }
 
     def _expected_life_cycle_years(self, device: dict) -> int:

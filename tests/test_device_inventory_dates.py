@@ -145,6 +145,19 @@ class DeviceInventoryDateTestCase(unittest.TestCase):
         self.assertEqual(desktop["usage_years"], 5)
         self.assertTrue(desktop["life_cycle_due"])
 
+    def test_confirm_needed_status_counts_as_inspection_needed(self) -> None:
+        device, _ = self.repository.upsert_device(
+            {
+                "management_no": "A-010",
+                "status": "확인 필요",
+            }
+        )
+
+        summary = self.repository.summarize_devices()
+
+        self.assertTrue(device["repair_or_inspection_needed"])
+        self.assertEqual(summary["repair_or_inspection_needed"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

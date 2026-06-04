@@ -19,12 +19,24 @@ const state = {
   accountEditorMode: "detail",
   siteAccountsLoaded: false,
   accountCopyStatus: {},
+  passwordItems: [],
+  passwordSearchQuery: "",
+  selectedPasswordId: null,
+  selectedPasswordIds: new Set(),
+  passwordEditorMode: "detail",
+  passwordItemsLoaded: false,
   deviceInventory: [],
   deviceInventoryFilter: "all",
   deviceInventorySearchQuery: "",
   selectedDeviceId: null,
   selectedDeviceIds: new Set(),
   deviceEditorMode: "detail",
+  deviceSummaryFilter: "all",
+  deviceColumnFilters: {},
+  deviceSort: {
+    key: "acquired_at",
+    direction: "asc",
+  },
   deviceMetadata: null,
   deviceEvents: [],
   deviceInventoryLoaded: false,
@@ -62,6 +74,12 @@ const VIEW_META = {
     contextLabel: "내부 관리",
     contextValue: () => "과학 정보부 업무 관련 사이트의 계정 정보를 확인할 수 있습니다.",
     sidebar: "사이트, 설명, URL, ID, PW, 비고를 같은 화면에서 관리합니다.",
+  },
+  "password-manager": {
+    label: "비밀번호 관리",
+    contextLabel: "번호키 및 내부 비밀번호",
+    contextValue: () => "업무 관련실 번호키와 다양한 내부 비밀번호를 빠르게 확인합니다.",
+    sidebar: "제목과 비밀번호만 간단하게 저장하고 필요할 때 바로 복사합니다.",
   },
   "coming-soon": {
     label: "추가 모듈 준비",
@@ -101,6 +119,7 @@ const elements = {
   logoutButton: document.getElementById("logoutButton"),
   navItems: Array.from(document.querySelectorAll("[data-view]")),
   viewPanels: Array.from(document.querySelectorAll("[data-view-panel]")),
+  topButtons: Array.from(document.querySelectorAll("[data-scroll-top-button]")),
 
   scanForm: document.getElementById("scanForm"),
   startIpInput: document.getElementById("startIpInput"),
@@ -192,6 +211,38 @@ const elements = {
   saveAccountButton: document.getElementById("saveAccountButton"),
   cancelAccountEditButton: document.getElementById("cancelAccountEditButton"),
 
+  passwordStatusPill: document.getElementById("passwordStatusPill"),
+  refreshPasswordsButton: document.getElementById("refreshPasswordsButton"),
+  passwordSearchInput: document.getElementById("passwordSearchInput"),
+  newPasswordButton: document.getElementById("newPasswordButton"),
+  passwordFeedbackText: document.getElementById("passwordFeedbackText"),
+  passwordSelectionCount: document.getElementById("passwordSelectionCount"),
+  deleteSelectedPasswordsButton: document.getElementById("deleteSelectedPasswordsButton"),
+  selectAllPasswordsCheckbox: document.getElementById("selectAllPasswordsCheckbox"),
+  passwordTotalValue: document.getElementById("passwordTotalValue"),
+  passwordMissingValue: document.getElementById("passwordMissingValue"),
+  passwordResultMeta: document.getElementById("passwordResultMeta"),
+  passwordItemsTableBody: document.getElementById("passwordItemsTableBody"),
+  passwordDetailView: document.getElementById("passwordDetailView"),
+  passwordDetailTitle: document.getElementById("passwordDetailTitle"),
+  passwordDetailStatus: document.getElementById("passwordDetailStatus"),
+  passwordDetailSummary: document.getElementById("passwordDetailSummary"),
+  passwordDetailTitleText: document.getElementById("passwordDetailTitleText"),
+  passwordDetailValue: document.getElementById("passwordDetailValue"),
+  passwordDetailCreatedAt: document.getElementById("passwordDetailCreatedAt"),
+  passwordDetailUpdatedAt: document.getElementById("passwordDetailUpdatedAt"),
+  passwordDetailNoteBox: document.getElementById("passwordDetailNoteBox"),
+  editPasswordButton: document.getElementById("editPasswordButton"),
+  deletePasswordButton: document.getElementById("deletePasswordButton"),
+  passwordEditorForm: document.getElementById("passwordEditorForm"),
+  passwordEditorTitle: document.getElementById("passwordEditorTitle"),
+  passwordEditorStatus: document.getElementById("passwordEditorStatus"),
+  passwordEditorDescription: document.getElementById("passwordEditorDescription"),
+  passwordTitleInput: document.getElementById("passwordTitleInput"),
+  passwordValueInput: document.getElementById("passwordValueInput"),
+  savePasswordButton: document.getElementById("savePasswordButton"),
+  cancelPasswordEditButton: document.getElementById("cancelPasswordEditButton"),
+
   deviceStatusPill: document.getElementById("deviceStatusPill"),
   refreshDevicesButton: document.getElementById("refreshDevicesButton"),
   deviceSearchInput: document.getElementById("deviceSearchInput"),
@@ -207,7 +258,12 @@ const elements = {
   deviceFeedbackText: document.getElementById("deviceFeedbackText"),
   deviceSelectionCount: document.getElementById("deviceSelectionCount"),
   deleteSelectedDevicesButton: document.getElementById("deleteSelectedDevicesButton"),
+  clearDeviceColumnFiltersButton: document.getElementById("clearDeviceColumnFiltersButton"),
   selectAllDevicesCheckbox: document.getElementById("selectAllDevicesCheckbox"),
+  deviceColumnFilterInputs: Array.from(document.querySelectorAll("[data-device-column-filter]")),
+  deviceSortButtons: Array.from(document.querySelectorAll("[data-device-sort]")),
+  deviceSortIndicators: Array.from(document.querySelectorAll("[data-sort-indicator]")),
+  deviceSummaryCards: Array.from(document.querySelectorAll("[data-device-summary-filter]")),
   deviceFilterButtons: Array.from(document.querySelectorAll("[data-device-filter]")),
   deviceTotalValue: document.getElementById("deviceTotalValue"),
   deviceNormalValue: document.getElementById("deviceNormalValue"),
@@ -252,6 +308,8 @@ const elements = {
   deviceStatusInput: document.getElementById("deviceStatusInput"),
   deviceUserInput: document.getElementById("deviceUserInput"),
   deviceImageInput: document.getElementById("deviceImageInput"),
+  deviceImageUploadButton: document.getElementById("deviceImageUploadButton"),
+  deviceImageUploadInput: document.getElementById("deviceImageUploadInput"),
   deviceNoteInput: document.getElementById("deviceNoteInput"),
   saveDeviceButton: document.getElementById("saveDeviceButton"),
   cancelDeviceEditButton: document.getElementById("cancelDeviceEditButton"),
@@ -283,6 +341,7 @@ const DEFAULT_DEVICE_METADATA = {
   statuses: [
     { value: "정상 사용", label: "정상 사용" },
     { value: "예비", label: "예비" },
+    { value: "확인 필요", label: "확인 필요" },
     { value: "점검 필요", label: "점검 필요" },
     { value: "점검중", label: "점검중" },
     { value: "수리중", label: "수리중" },
@@ -329,6 +388,9 @@ const DEVICE_STATUS_LABELS = {
   healthy: "정상 사용",
   예비: "예비",
   spare: "예비",
+  "확인 필요": "확인 필요",
+  confirm: "확인 필요",
+  check: "확인 필요",
   "점검 필요": "점검 필요",
   점검중: "점검중",
   inspection: "점검중",
@@ -350,19 +412,22 @@ const DEVICE_STATUS_CLASS_MAP = {
   정상: "healthy",
   normal: "healthy",
   healthy: "healthy",
-  예비: "neutral",
-  spare: "neutral",
-  "점검 필요": "warning",
-  점검중: "warning",
-  inspection: "warning",
-  수리중: "danger",
-  repair: "danger",
-  maintenance: "warning",
-  "교체 검토": "warning",
-  "불용 처리 예정": "warning",
-  "불용 처리 완료": "danger",
-  "불용 예정": "warning",
-  "불용 완료": "danger",
+  예비: "spare",
+  spare: "spare",
+  "확인 필요": "confirm",
+  confirm: "confirm",
+  check: "confirm",
+  "점검 필요": "inspection-needed",
+  점검중: "inspecting",
+  inspection: "inspecting",
+  수리중: "repair",
+  repair: "repair",
+  maintenance: "inspecting",
+  "교체 검토": "replacement",
+  "불용 처리 예정": "retire-pending",
+  "불용 처리 완료": "retired",
+  "불용 예정": "retire-pending",
+  "불용 완료": "retired",
   불용대기: "danger",
   폐기: "danger",
   disposed: "danger",
@@ -759,6 +824,7 @@ function initializeAppShell() {
   populateDeviceSelectOptions();
   resetDetailPanel();
   resetAccountDetail();
+  resetPasswordDetail();
   resetDeviceDetail();
   setTopbarForView("ip-scan");
 }
@@ -812,9 +878,25 @@ function switchView(view) {
 
   if (view === "site-accounts") {
     loadSiteAccounts();
+  } else if (view === "password-manager") {
+    loadPasswordItems();
   } else if (view === "device-inventory") {
     loadDeviceInventory();
   }
+}
+
+function scrollToPageTop() {
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}
+
+function scrollToDeviceEditor() {
+  elements.deviceEditorForm.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
 }
 
 function setIdleState() {
@@ -1992,6 +2074,356 @@ function handleSiteAccountSearch() {
   renderSiteAccounts();
 }
 
+function setPasswordFeedback(message) {
+  elements.passwordFeedbackText.textContent = message;
+}
+
+function setPasswordSummary(summary = {}) {
+  elements.passwordTotalValue.textContent = String(summary.total ?? 0);
+  elements.passwordMissingValue.textContent = String(summary.missing_password ?? 0);
+  elements.passwordStatusPill.textContent = `총 ${summary.total ?? 0}건`;
+}
+
+function applyPasswordFilter(items) {
+  let next = [...items];
+  const query = state.passwordSearchQuery.trim().toLowerCase();
+  if (query) {
+    next = next.filter((item) => {
+      const haystack = [item.title, item.password].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+  return next;
+}
+
+function getSelectedPasswordItem() {
+  return state.passwordItems.find((item) => item.id === state.selectedPasswordId) || null;
+}
+
+function renderPasswordCopyButton(item, variant = "table") {
+  const value = normalizeCredentialValue(item?.password);
+  const label = item?.title || "선택된 비밀번호";
+  const displayValue = value ? "••••" : "-";
+  const buttonClass = [
+    "credential-copy-button",
+    variant === "detail" ? "credential-copy-button--detail" : "",
+    value ? "" : "is-empty",
+  ].filter(Boolean).join(" ");
+  return `
+    <button
+      class="${buttonClass}"
+      type="button"
+      data-password-copy="${escapeHtml(item?.id || "")}"
+      ${value ? "" : "disabled"}
+      aria-label="${escapeHtml(label)} 비밀번호 복사"
+    >
+      <span class="credential-copy-value">${escapeHtml(displayValue)}</span>
+      <span class="credential-copy-hint">복사</span>
+    </button>
+  `;
+}
+
+async function copyPasswordItem(itemId) {
+  const item = state.passwordItems.find((target) => target.id === itemId);
+  if (!item || !normalizeCredentialValue(item.password)) {
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(item.password);
+    setPasswordFeedback(`'${item.title}' 비밀번호를 복사했습니다.`);
+  } catch (error) {
+    setPasswordFeedback(error.message || "비밀번호 복사에 실패했습니다.");
+  }
+}
+
+function bindPasswordCopyButtons() {
+  Array.from(document.querySelectorAll("[data-password-copy]")).forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      copyPasswordItem(button.dataset.passwordCopy);
+    });
+  });
+}
+
+function syncPasswordSelection(filteredItems = applyPasswordFilter(state.passwordItems)) {
+  const existingIds = new Set(state.passwordItems.map((item) => item.id));
+  state.selectedPasswordIds = new Set(Array.from(state.selectedPasswordIds).filter((id) => existingIds.has(id)));
+  const visibleIds = new Set(filteredItems.map((item) => item.id));
+  const selectedVisibleCount = Array.from(state.selectedPasswordIds).filter((id) => visibleIds.has(id)).length;
+  const selectedCount = state.selectedPasswordIds.size;
+  elements.passwordSelectionCount.textContent = `선택 ${selectedCount}건`;
+  elements.deleteSelectedPasswordsButton.disabled = selectedCount === 0;
+  elements.selectAllPasswordsCheckbox.checked = filteredItems.length > 0 && selectedVisibleCount === filteredItems.length;
+  elements.selectAllPasswordsCheckbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < filteredItems.length;
+}
+
+function togglePasswordSelection(itemId, checked) {
+  if (!itemId) {
+    return;
+  }
+
+  if (checked) {
+    state.selectedPasswordIds.add(itemId);
+  } else {
+    state.selectedPasswordIds.delete(itemId);
+  }
+  renderPasswordItems();
+}
+
+function toggleAllVisiblePasswords(checked) {
+  applyPasswordFilter(state.passwordItems).forEach((item) => {
+    if (checked) {
+      state.selectedPasswordIds.add(item.id);
+    } else {
+      state.selectedPasswordIds.delete(item.id);
+    }
+  });
+  renderPasswordItems();
+}
+
+function resetPasswordDetail() {
+  elements.passwordDetailTitle.textContent = "아직 선택된 항목이 없습니다";
+  elements.passwordDetailStatus.textContent = "대기";
+  elements.passwordDetailStatus.className = "status neutral";
+  elements.passwordDetailSummary.textContent = "왼쪽 표에서 항목을 선택하면 상세 정보가 표시됩니다.";
+  elements.passwordDetailTitleText.textContent = "-";
+  elements.passwordDetailValue.innerHTML = renderPasswordCopyButton(null, "detail");
+  elements.passwordDetailCreatedAt.textContent = "-";
+  elements.passwordDetailUpdatedAt.textContent = "-";
+  elements.passwordDetailNoteBox.textContent = "비밀번호 항목은 내부 업무용으로만 사용하고, 필요할 때 바로 복사할 수 있습니다.";
+  elements.editPasswordButton.disabled = true;
+  elements.deletePasswordButton.disabled = true;
+  bindPasswordCopyButtons();
+}
+
+function renderSelectedPasswordItem() {
+  if (state.passwordEditorMode !== "detail") {
+    elements.passwordDetailView.classList.add("is-hidden");
+    elements.passwordEditorForm.classList.remove("is-hidden");
+    return;
+  }
+
+  elements.passwordDetailView.classList.remove("is-hidden");
+  elements.passwordEditorForm.classList.add("is-hidden");
+
+  const item = getSelectedPasswordItem();
+  if (!item) {
+    resetPasswordDetail();
+    return;
+  }
+
+  const hasPassword = Boolean(normalizeCredentialValue(item.password));
+  elements.passwordDetailTitle.textContent = item.title;
+  elements.passwordDetailStatus.textContent = hasPassword ? "저장됨" : "비밀번호 없음";
+  elements.passwordDetailStatus.className = `status ${hasPassword ? "healthy" : "warning"}`;
+  elements.passwordDetailSummary.textContent = "업무 관련실 번호키 또는 내부 비밀번호 항목입니다.";
+  elements.passwordDetailTitleText.textContent = item.title;
+  elements.passwordDetailValue.innerHTML = renderPasswordCopyButton(item, "detail");
+  elements.passwordDetailCreatedAt.textContent = formatTime(item.created_at);
+  elements.passwordDetailUpdatedAt.textContent = formatTime(item.updated_at);
+  elements.passwordDetailNoteBox.textContent = hasPassword
+    ? "비밀번호를 클릭하면 클립보드에 복사됩니다."
+    : "비밀번호가 아직 등록되지 않았습니다. 수정 버튼으로 입력할 수 있습니다.";
+  elements.editPasswordButton.disabled = false;
+  elements.deletePasswordButton.disabled = false;
+  bindPasswordCopyButtons();
+}
+
+function renderPasswordItems() {
+  const filtered = applyPasswordFilter(state.passwordItems);
+  elements.passwordResultMeta.textContent = `정렬: 최신 수정순 / 현재 ${filtered.length}건`;
+
+  const selectedInFiltered = filtered.find((item) => item.id === state.selectedPasswordId);
+  if (!selectedInFiltered) {
+    state.selectedPasswordId = filtered[0]?.id || null;
+  }
+
+  if (!filtered.length) {
+    elements.passwordItemsTableBody.innerHTML = `
+      <tr>
+        <td colspan="3" class="empty-cell">조건에 맞는 비밀번호 항목이 없습니다.</td>
+      </tr>
+    `;
+    syncPasswordSelection(filtered);
+    renderSelectedPasswordItem();
+    return;
+  }
+
+  elements.passwordItemsTableBody.innerHTML = filtered
+    .map((item) => {
+      const updatedText = item.updated_at ? `수정 ${escapeHtml(formatTime(item.updated_at))}` : "수정 기록 없음";
+      return `
+        <tr data-password-id="${escapeHtml(item.id)}" class="${item.id === state.selectedPasswordId ? "selected" : ""}">
+          <td class="select-cell">
+            <input
+              type="checkbox"
+              class="row-select-checkbox"
+              data-password-select="${escapeHtml(item.id)}"
+              aria-label="${escapeHtml(item.title)} 선택"
+              ${state.selectedPasswordIds.has(item.id) ? "checked" : ""}
+            />
+          </td>
+          <td>
+            <div class="primary-cell">
+              <strong>${escapeHtml(item.title)}</strong>
+              <span class="secondary-line">${updatedText}</span>
+            </div>
+          </td>
+          <td>${renderPasswordCopyButton(item)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  syncPasswordSelection(filtered);
+
+  Array.from(elements.passwordItemsTableBody.querySelectorAll("tr[data-password-id]")).forEach((row) => {
+    row.addEventListener("click", () => {
+      state.selectedPasswordId = row.dataset.passwordId;
+      state.passwordEditorMode = "detail";
+      renderPasswordItems();
+      renderSelectedPasswordItem();
+    });
+  });
+
+  Array.from(elements.passwordItemsTableBody.querySelectorAll("[data-password-select]")).forEach((checkbox) => {
+    checkbox.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    checkbox.addEventListener("change", () => {
+      togglePasswordSelection(checkbox.dataset.passwordSelect, checkbox.checked);
+    });
+  });
+
+  bindPasswordCopyButtons();
+  renderSelectedPasswordItem();
+}
+
+async function fetchPasswordItems(options = {}) {
+  const response = await fetchJson("/api/password-items", { headers: {} });
+  state.passwordItems = response.items || [];
+  state.passwordItemsLoaded = true;
+  setPasswordSummary(response.summary || {});
+
+  if (options.selectedPasswordId) {
+    state.selectedPasswordId = options.selectedPasswordId;
+  } else if (!state.selectedPasswordId && state.passwordItems.length > 0) {
+    state.selectedPasswordId = state.passwordItems[0].id;
+  } else if (state.selectedPasswordId && !state.passwordItems.some((item) => item.id === state.selectedPasswordId)) {
+    state.selectedPasswordId = state.passwordItems[0]?.id || null;
+  }
+
+  renderPasswordItems();
+}
+
+async function loadPasswordItems() {
+  try {
+    setPasswordFeedback("비밀번호 목록을 불러오는 중입니다.");
+    await fetchPasswordItems();
+    setPasswordFeedback("비밀번호 목록을 최신 상태로 불러왔습니다.");
+  } catch (error) {
+    setPasswordFeedback(error.message);
+    elements.passwordStatusPill.textContent = "오류";
+  }
+}
+
+function showPasswordEditor(mode, item = null) {
+  state.passwordEditorMode = mode;
+  elements.passwordDetailView.classList.add("is-hidden");
+  elements.passwordEditorForm.classList.remove("is-hidden");
+
+  const isEdit = mode === "edit" && item;
+  elements.passwordEditorTitle.textContent = isEdit ? "비밀번호 항목 수정" : "새 항목 추가";
+  elements.passwordEditorDescription.textContent = isEdit
+    ? `${item.title} 항목을 수정합니다.`
+    : "업무 관련실 번호키 또는 내부 비밀번호를 입력하십시오.";
+  elements.savePasswordButton.textContent = isEdit ? "수정 저장" : "새 항목 저장";
+  elements.passwordTitleInput.value = item?.title || "";
+  elements.passwordValueInput.value = item?.password || "";
+}
+
+function hidePasswordEditor() {
+  state.passwordEditorMode = "detail";
+  renderSelectedPasswordItem();
+}
+
+async function savePasswordItem(event) {
+  event.preventDefault();
+  const item = getSelectedPasswordItem();
+  const payload = {
+    title: elements.passwordTitleInput.value.trim(),
+    password: elements.passwordValueInput.value.trim(),
+  };
+  const isEdit = state.passwordEditorMode === "edit" && item;
+
+  try {
+    const response = await fetchJson(isEdit ? `/api/password-items/${item.id}` : "/api/password-items", {
+      method: isEdit ? "PATCH" : "POST",
+      body: JSON.stringify(payload),
+    });
+    await fetchPasswordItems({ selectedPasswordId: response.id });
+    state.passwordEditorMode = "detail";
+    renderSelectedPasswordItem();
+    setPasswordFeedback(isEdit ? "비밀번호 항목을 수정했습니다." : "새 비밀번호 항목을 저장했습니다.");
+  } catch (error) {
+    setPasswordFeedback(error.message);
+  }
+}
+
+async function deleteSelectedPasswordItem() {
+  const item = getSelectedPasswordItem();
+  if (!item) {
+    return;
+  }
+  const confirmed = window.confirm(`'${item.title}' 항목을 삭제하시겠습니까?`);
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await fetchJson(`/api/password-items/${item.id}`, { method: "DELETE" });
+    state.selectedPasswordId = null;
+    await fetchPasswordItems();
+    setPasswordFeedback("선택한 비밀번호 항목을 삭제했습니다.");
+  } catch (error) {
+    setPasswordFeedback(error.message);
+  }
+}
+
+async function deleteSelectedPasswordItems() {
+  const itemIds = Array.from(state.selectedPasswordIds);
+  if (!itemIds.length) {
+    return;
+  }
+
+  const confirmed = window.confirm(`선택한 비밀번호 항목 ${itemIds.length}건을 삭제하시겠습니까?`);
+  if (!confirmed) {
+    return;
+  }
+
+  elements.deleteSelectedPasswordsButton.disabled = true;
+  try {
+    for (const itemId of itemIds) {
+      await fetchJson(`/api/password-items/${itemId}`, { method: "DELETE" });
+    }
+    if (state.selectedPasswordId && state.selectedPasswordIds.has(state.selectedPasswordId)) {
+      state.selectedPasswordId = null;
+    }
+    state.selectedPasswordIds.clear();
+    await fetchPasswordItems();
+    setPasswordFeedback(`선택한 비밀번호 항목 ${itemIds.length}건을 삭제했습니다.`);
+  } catch (error) {
+    setPasswordFeedback(error.message);
+    await fetchPasswordItems();
+  }
+}
+
+function handlePasswordSearch() {
+  state.passwordSearchQuery = elements.passwordSearchInput.value || "";
+  renderPasswordItems();
+}
+
 function hideDeviceFeedback() {
   if (deviceFeedbackTimerId) {
     window.clearTimeout(deviceFeedbackTimerId);
@@ -2033,11 +2465,100 @@ function setDeviceSummary(summary = {}) {
   elements.deviceStatusPill.textContent = `총 ${total ?? 0}건`;
 }
 
+function getDeviceColumnValue(item, key) {
+  switch (key) {
+    case "location":
+      return item.location || "";
+    case "device_type":
+      return item.device_type || "";
+    case "manufacturer":
+      return item.manufacturer || "";
+    case "model_name":
+      return item.model_name || "";
+    case "serial_number":
+      return item.serial_number || "";
+    case "cpu":
+      return item.cpu || "";
+    case "ram":
+      return item.ram || "";
+    case "acquired_at":
+      return formatDeviceMonth(item.acquired_at);
+    case "usage_years":
+      return Number.isFinite(item.usage_years) ? item.usage_years : "";
+    case "status":
+      return deviceStatusLabel(item.status);
+    case "note":
+      return item.note || "";
+    case "assigned_user":
+      return item.assigned_user || "";
+    default:
+      return "";
+  }
+}
+
+function compareDeviceColumnValues(left, right, key) {
+  const leftValue = getDeviceColumnValue(left, key);
+  const rightValue = getDeviceColumnValue(right, key);
+
+  if (key === "usage_years") {
+    const leftNumber = Number.isFinite(Number(leftValue)) ? Number(leftValue) : Number.POSITIVE_INFINITY;
+    const rightNumber = Number.isFinite(Number(rightValue)) ? Number(rightValue) : Number.POSITIVE_INFINITY;
+    return leftNumber - rightNumber;
+  }
+
+  return String(leftValue || "").localeCompare(String(rightValue || ""), "ko-KR", {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
+
+function updateDeviceSortControls() {
+  elements.deviceSortButtons.forEach((button) => {
+    const isActive = button.dataset.deviceSort === state.deviceSort.key;
+    button.classList.toggle("active", isActive);
+    button.setAttribute(
+      "aria-sort",
+      isActive ? (state.deviceSort.direction === "asc" ? "ascending" : "descending") : "none",
+    );
+  });
+  elements.deviceSortIndicators.forEach((indicator) => {
+    indicator.textContent = indicator.dataset.sortIndicator === state.deviceSort.key
+      ? (state.deviceSort.direction === "asc" ? "▲" : "▼")
+      : "";
+  });
+}
+
+function matchesDeviceSummaryFilter(item) {
+  switch (state.deviceSummaryFilter) {
+    case "normal":
+      return deviceStatusClass(item.status) === "healthy";
+    case "life_cycle_due":
+      return Boolean(item.life_cycle_due);
+    case "repair_or_inspection_needed":
+      return deviceNeedsInspection(item);
+    case "all":
+    default:
+      return true;
+  }
+}
+
+function updateDeviceSummaryCards() {
+  elements.deviceSummaryCards.forEach((card) => {
+    const isActive = card.dataset.deviceSummaryFilter === state.deviceSummaryFilter;
+    card.classList.toggle("active", isActive);
+    card.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
 function applyDeviceFilter(devices) {
   let next = [...devices];
 
   if (state.deviceInventoryFilter !== "all") {
     next = next.filter((item) => item.asset_group === state.deviceInventoryFilter);
+  }
+
+  if (state.deviceSummaryFilter !== "all") {
+    next = next.filter(matchesDeviceSummaryFilter);
   }
 
   const query = state.deviceInventorySearchQuery.trim().toLowerCase();
@@ -2064,12 +2585,18 @@ function applyDeviceFilter(devices) {
     });
   }
 
+  Object.entries(state.deviceColumnFilters).forEach(([key, value]) => {
+    const filterValue = normalizeText(value).toLowerCase();
+    if (!filterValue) {
+      return;
+    }
+    next = next.filter((item) => String(getDeviceColumnValue(item, key)).toLowerCase().includes(filterValue));
+  });
+
   next.sort((left, right) => {
-    const leftDate = left.acquired_at || "9999-12-31";
-    const rightDate = right.acquired_at || "9999-12-31";
-    const dateCompare = leftDate.localeCompare(rightDate);
-    if (dateCompare !== 0) {
-      return dateCompare;
+    const sortCompare = compareDeviceColumnValues(left, right, state.deviceSort.key);
+    if (sortCompare !== 0) {
+      return state.deviceSort.direction === "asc" ? sortCompare : -sortCompare;
     }
     const leftKey = left.management_no || left.model_name || left.id;
     const rightKey = right.management_no || right.model_name || right.id;
@@ -2212,7 +2739,11 @@ function renderSelectedDevice() {
 
 function renderDeviceInventory() {
   const filtered = applyDeviceFilter(state.deviceInventory);
-  elements.deviceResultMeta.textContent = `정렬: 구입시기 오름차순 / 현재 ${filtered.length}건`;
+  updateDeviceSortControls();
+  updateDeviceSummaryCards();
+  const sortDirectionText = state.deviceSort.direction === "asc" ? "오름차순" : "내림차순";
+  const activeColumnFilterCount = Object.values(state.deviceColumnFilters).filter((value) => normalizeText(value)).length;
+  elements.deviceResultMeta.textContent = `정렬: ${sortDirectionText} / 열 필터 ${activeColumnFilterCount}개 / 현재 ${filtered.length}건`;
 
   const selectedInFiltered = filtered.find((item) => item.id === state.selectedDeviceId);
   if (!selectedInFiltered) {
@@ -2222,7 +2753,7 @@ function renderDeviceInventory() {
   if (!filtered.length) {
     elements.deviceInventoryTableBody.innerHTML = `
       <tr>
-        <td colspan="15" class="empty-cell">조건에 맞는 기기가 없습니다.</td>
+        <td colspan="16" class="empty-cell">조건에 맞는 기기가 없습니다.</td>
       </tr>
     `;
     syncDeviceSelection(filtered);
@@ -2237,6 +2768,7 @@ function renderDeviceInventory() {
       const imageButton = item.image_url
         ? `<button class="table-image-button" type="button" data-device-image="${escapeHtml(item.id)}">사진 보기</button>`
         : '<span class="muted-inline">없음</span>';
+      const editButton = `<button class="table-row-action-button" type="button" data-device-edit="${escapeHtml(item.id)}">수정</button>`;
       return `
         <tr data-device-id="${escapeHtml(item.id)}" class="${item.id === state.selectedDeviceId ? "selected" : ""}">
           <td class="select-cell">
@@ -2262,6 +2794,7 @@ function renderDeviceInventory() {
           <td class="wrap-cell">${escapeHtml(item.note || "-")}</td>
           <td class="wrap-cell">${escapeHtml(item.assigned_user || "-")}</td>
           <td>${imageButton}</td>
+          <td>${editButton}</td>
         </tr>
       `;
     })
@@ -2297,6 +2830,18 @@ function renderDeviceInventory() {
     });
   });
 
+  Array.from(elements.deviceInventoryTableBody.querySelectorAll("[data-device-edit]")).forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const device = state.deviceInventory.find((item) => item.id === button.dataset.deviceEdit);
+      if (device) {
+        state.selectedDeviceId = device.id;
+        renderDeviceInventory();
+        showDeviceEditor("edit", device, { scrollIntoView: true });
+      }
+    });
+  });
+
   renderSelectedDevice();
 }
 
@@ -2306,12 +2851,43 @@ function activateDeviceFilter(button) {
   renderDeviceInventory();
 }
 
+function activateDeviceSummaryFilter(card) {
+  state.deviceSummaryFilter = card.dataset.deviceSummaryFilter || "all";
+  renderDeviceInventory();
+}
+
 function handleDeviceSearch() {
   state.deviceInventorySearchQuery = elements.deviceSearchInput.value || "";
   renderDeviceInventory();
 }
 
-function showDeviceEditor(mode, device = null) {
+function handleDeviceColumnFilter(event) {
+  state.deviceColumnFilters[event.target.dataset.deviceColumnFilter] = event.target.value || "";
+  renderDeviceInventory();
+}
+
+function clearDeviceColumnFilters() {
+  state.deviceColumnFilters = {};
+  elements.deviceColumnFilterInputs.forEach((input) => {
+    input.value = "";
+  });
+  renderDeviceInventory();
+}
+
+function toggleDeviceSort(button) {
+  const key = button.dataset.deviceSort;
+  if (state.deviceSort.key === key) {
+    state.deviceSort.direction = state.deviceSort.direction === "asc" ? "desc" : "asc";
+  } else {
+    state.deviceSort = {
+      key,
+      direction: "asc",
+    };
+  }
+  renderDeviceInventory();
+}
+
+function showDeviceEditor(mode, device = null, options = {}) {
   state.deviceEditorMode = mode;
   elements.deviceDetailView.classList.add("is-hidden");
   elements.deviceEditorForm.classList.remove("is-hidden");
@@ -2337,6 +2913,9 @@ function showDeviceEditor(mode, device = null) {
   elements.deviceUserInput.value = device?.assigned_user || "";
   elements.deviceImageInput.value = device?.image_url || "";
   elements.deviceNoteInput.value = device?.note || "";
+  if (options.scrollIntoView) {
+    requestAnimationFrame(scrollToDeviceEditor);
+  }
 }
 
 function hideDeviceEditor() {
@@ -2488,6 +3067,47 @@ async function deleteSelectedDevices() {
   }
 }
 
+function openDeviceImageUpload() {
+  elements.deviceImageUploadInput.click();
+}
+
+async function uploadDeviceImage(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("image", file);
+  elements.deviceImageUploadButton.disabled = true;
+
+  try {
+    setDeviceFeedback("제품이미지를 업로드하는 중입니다.", { visible: true });
+    const response = await fetch("/api/device-inventory/images", {
+      method: "POST",
+      body: formData,
+    });
+    const payload = await response.json();
+    if (response.status === 401) {
+      handleAuthenticationRequired(payload.error || "로그인이 필요합니다.");
+      throw new Error(payload.error || "로그인이 필요합니다.");
+    }
+    if (!response.ok) {
+      throw new Error(payload.error || "제품이미지 업로드에 실패했습니다.");
+    }
+    elements.deviceImageInput.value = payload.url || "";
+    setDeviceFeedback("제품이미지를 업로드했습니다. 저장을 누르면 기기에 반영됩니다.", {
+      visible: true,
+      autoHideMs: 3200,
+    });
+  } catch (error) {
+    setDeviceFeedback(error.message, { visible: true });
+  } finally {
+    elements.deviceImageUploadButton.disabled = false;
+    event.target.value = "";
+  }
+}
+
 async function openDeviceCsvImport() {
   setCsvMenuOpen("device", false);
   elements.deviceImportInput.click();
@@ -2586,6 +3206,9 @@ elements.logoutButton.addEventListener("click", handleLogout);
 elements.navItems.forEach((button) => {
   button.addEventListener("click", () => switchView(button.dataset.view));
 });
+elements.topButtons.forEach((button) => {
+  button.addEventListener("click", scrollToPageTop);
+});
 
 elements.scanForm.addEventListener("submit", startScan);
 elements.cancelScanButton.addEventListener("click", cancelScan);
@@ -2635,9 +3258,42 @@ elements.deleteAccountButton.addEventListener("click", deleteSelectedAccount);
 elements.accountEditorForm.addEventListener("submit", saveAccount);
 elements.cancelAccountEditButton.addEventListener("click", hideAccountEditor);
 
+elements.refreshPasswordsButton.addEventListener("click", loadPasswordItems);
+elements.newPasswordButton.addEventListener("click", () => showPasswordEditor("create"));
+elements.passwordSearchInput.addEventListener("input", handlePasswordSearch);
+elements.selectAllPasswordsCheckbox.addEventListener("change", () => {
+  toggleAllVisiblePasswords(elements.selectAllPasswordsCheckbox.checked);
+});
+elements.deleteSelectedPasswordsButton.addEventListener("click", deleteSelectedPasswordItems);
+elements.editPasswordButton.addEventListener("click", () => {
+  const item = getSelectedPasswordItem();
+  if (item) {
+    showPasswordEditor("edit", item);
+  }
+});
+elements.deletePasswordButton.addEventListener("click", deleteSelectedPasswordItem);
+elements.passwordEditorForm.addEventListener("submit", savePasswordItem);
+elements.cancelPasswordEditButton.addEventListener("click", hidePasswordEditor);
+
 elements.refreshDevicesButton.addEventListener("click", handleRefreshDevices);
-elements.newDeviceButton.addEventListener("click", () => showDeviceEditor("create"));
+elements.newDeviceButton.addEventListener("click", () => showDeviceEditor("create", null, { scrollIntoView: true }));
 elements.deviceSearchInput.addEventListener("input", handleDeviceSearch);
+elements.deviceColumnFilterInputs.forEach((input) => {
+  input.addEventListener("input", handleDeviceColumnFilter);
+});
+elements.deviceSortButtons.forEach((button) => {
+  button.addEventListener("click", () => toggleDeviceSort(button));
+});
+elements.deviceSummaryCards.forEach((card) => {
+  card.addEventListener("click", () => activateDeviceSummaryFilter(card));
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      activateDeviceSummaryFilter(card);
+    }
+  });
+});
+elements.clearDeviceColumnFiltersButton.addEventListener("click", clearDeviceColumnFilters);
 elements.deviceImportButton.addEventListener("click", (event) => {
   event.stopPropagation();
   toggleCsvMenu("device");
@@ -2655,13 +3311,15 @@ elements.deviceFilterButtons.forEach((button) => {
 elements.editDeviceButton.addEventListener("click", () => {
   const device = getSelectedDevice();
   if (device) {
-    showDeviceEditor("edit", device);
+    showDeviceEditor("edit", device, { scrollIntoView: true });
   }
 });
 elements.deleteDeviceButton.addEventListener("click", deleteSelectedDevice);
 elements.deviceEditorForm.addEventListener("submit", saveDevice);
 elements.cancelDeviceEditButton.addEventListener("click", hideDeviceEditor);
 elements.deviceImportInput.addEventListener("change", importDeviceCsv);
+elements.deviceImageUploadButton.addEventListener("click", openDeviceImageUpload);
+elements.deviceImageUploadInput.addEventListener("change", uploadDeviceImage);
 elements.deviceReportButton.addEventListener("click", downloadDeviceReport);
 elements.deviceImageModalBackdrop.addEventListener("click", closeDeviceImageModal);
 elements.deviceImageModalClose.addEventListener("click", closeDeviceImageModal);

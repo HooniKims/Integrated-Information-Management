@@ -17,6 +17,73 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         pattern = match.group(1)
         self.assertRegex("2026-06", re.compile(f"^(?:{pattern})$"))
 
+    def test_each_view_has_top_button(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        view_count = len(re.findall(r'<section class="view-panel(?: active)?" data-view-panel=', html))
+        top_button_count = html.count('data-scroll-top-button')
+
+        self.assertGreaterEqual(view_count, 1)
+        self.assertEqual(top_button_count, view_count)
+
+    def test_device_table_renders_direct_edit_action(self) -> None:
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("data-device-edit", script)
+        self.assertIn("showDeviceEditor(\"edit\", device", script)
+
+    def test_device_table_has_column_filters_and_sort_buttons(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("data-device-column-filter", html)
+        self.assertIn("data-device-sort", html)
+        self.assertIn("clearDeviceColumnFiltersButton", script)
+        self.assertIn("deviceColumnFilters", script)
+        self.assertIn("deviceSort", script)
+
+    def test_confirm_needed_status_is_available_and_styled(self) -> None:
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        styles = (PROJECT_ROOT / "web" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('"확인 필요"', script)
+        self.assertIn(".status.confirm", styles)
+        self.assertIn(".status.replacement", styles)
+        self.assertIn(".status.retired", styles)
+
+    def test_device_summary_cards_filter_inventory_list(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('data-device-summary-filter="all"', html)
+        self.assertIn('data-device-summary-filter="normal"', html)
+        self.assertIn('data-device-summary-filter="life_cycle_due"', html)
+        self.assertIn('data-device-summary-filter="repair_or_inspection_needed"', html)
+        self.assertIn("deviceSummaryFilter", script)
+        self.assertIn("activateDeviceSummaryFilter", script)
+
+    def test_device_form_can_upload_internal_product_image(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="deviceImageUploadInput"', html)
+        self.assertIn('id="deviceImageUploadButton"', html)
+        self.assertIn('accept="image/png,image/jpeg,image/webp"', html)
+        self.assertIn("uploadDeviceImage", script)
+        self.assertIn("/api/device-inventory/images", script)
+
+    def test_password_manager_view_is_available(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('data-view="password-manager"', html)
+        self.assertIn('data-view-panel="password-manager"', html)
+        self.assertIn('id="passwordItemsTableBody"', html)
+        self.assertIn('id="passwordTitleInput"', html)
+        self.assertIn('id="passwordValueInput"', html)
+        self.assertIn("/api/password-items", script)
+        self.assertIn("loadPasswordItems", script)
+        self.assertIn("savePasswordItem", script)
+
 
 if __name__ == "__main__":
     unittest.main()

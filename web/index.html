@@ -71,6 +71,10 @@
           <span class="nav-icon">PW</span>
           <span>사이트 계정 관리</span>
         </button>
+        <button class="nav-item" type="button" data-view="password-manager">
+          <span class="nav-icon">KY</span>
+          <span>비밀번호 관리</span>
+        </button>
         <button class="nav-item" type="button" data-view="device-inventory">
           <span class="nav-icon">DV</span>
           <span>기기관리대장</span>
@@ -289,6 +293,8 @@
           </section>
         </section>
 
+        <button class="top-button" type="button" data-scroll-top-button>TOP</button>
+
         <section class="view-panel" data-view-panel="site-accounts">
           <section class="page-intro">
             <span class="eyebrow">내부 사이트 계정 정리</span>
@@ -493,6 +499,157 @@
           </section>
         </section>
 
+        <button class="top-button" type="button" data-scroll-top-button>TOP</button>
+
+        <section class="view-panel" data-view-panel="password-manager">
+          <section class="page-intro">
+            <span class="eyebrow">업무 관련실 보안 정보</span>
+            <div class="page-title-row">
+              <div>
+                <h1>비밀번호 관리</h1>
+                <p class="page-subtitle">업무 관련실 번호키와 내부 비밀번호를 제목과 비밀번호 중심으로 간단하게 관리합니다.</p>
+              </div>
+              <span class="sync-pill" id="passwordStatusPill">목록 준비 중</span>
+            </div>
+          </section>
+
+          <section class="search-panel">
+            <div class="account-toolbar">
+              <label class="search-input account-search-input">
+                <strong>검색</strong>
+                <input type="text" id="passwordSearchInput" placeholder="제목 또는 비밀번호 검색" aria-label="비밀번호 항목 검색" />
+              </label>
+              <div class="inventory-action-group">
+                <button class="primary-button" type="button" id="newPasswordButton">새 항목 추가</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="stats-grid" aria-label="password item summary">
+            <article class="stat-card">
+              <span class="stat-label">등록 항목</span>
+              <strong class="stat-value" id="passwordTotalValue">0</strong>
+              <span class="stat-meta">저장된 전체 비밀번호</span>
+            </article>
+            <article class="stat-card warning">
+              <span class="stat-label">비밀번호 없음</span>
+              <strong class="stat-value" id="passwordMissingValue">0</strong>
+              <span class="stat-meta">입력이 필요한 항목</span>
+            </article>
+          </section>
+
+          <section class="workspace split-workspace account-workspace">
+            <div class="panel account-list-panel">
+              <div class="panel-header">
+                <div class="panel-title-wrap">
+                  <h2 class="panel-title">비밀번호 목록</h2>
+                  <span class="panel-subtitle" id="passwordResultMeta">정렬: 최신 수정순</span>
+                </div>
+                <div class="panel-header-actions">
+                  <div class="account-feedback" id="passwordFeedbackText" aria-live="polite">비밀번호 목록을 불러오는 중입니다.</div>
+                  <span class="selection-count" id="passwordSelectionCount">선택 0건</span>
+                  <button class="ghost-button danger-button" type="button" id="deleteSelectedPasswordsButton" disabled>선택 삭제</button>
+                  <button class="secondary-button" type="button" id="refreshPasswordsButton">목록 새로고침</button>
+                </div>
+              </div>
+              <div class="panel-body account-list-body">
+                <table class="password-table">
+                  <thead>
+                    <tr>
+                      <th class="select-column">
+                        <input type="checkbox" id="selectAllPasswordsCheckbox" aria-label="현재 비밀번호 목록 전체 선택" />
+                      </th>
+                      <th>제목</th>
+                      <th>비밀번호</th>
+                    </tr>
+                  </thead>
+                  <tbody id="passwordItemsTableBody">
+                    <tr>
+                      <td colspan="3" class="empty-cell">저장된 비밀번호 항목이 아직 없습니다.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <aside class="panel detail-panel secure-panel">
+              <div id="passwordDetailView">
+                <div class="detail-top">
+                  <div class="detail-name">
+                    <div>
+                      <p class="eyebrow detail-eyebrow">선택된 비밀번호</p>
+                      <h2 id="passwordDetailTitle">아직 선택된 항목이 없습니다</h2>
+                    </div>
+                    <span class="status neutral" id="passwordDetailStatus">대기</span>
+                  </div>
+                  <p class="panel-subtitle" id="passwordDetailSummary">왼쪽 표에서 항목을 선택하면 상세 정보가 표시됩니다.</p>
+                </div>
+
+                <div class="detail-meta">
+                  <div class="detail-grid account-detail-grid">
+                    <div class="detail-item">
+                      <span class="detail-item-label">제목</span>
+                      <span class="detail-item-value wrap-text" id="passwordDetailTitleText">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-item-label">비밀번호</span>
+                      <span class="detail-item-value mono" id="passwordDetailValue">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-item-label">등록 시각</span>
+                      <span class="detail-item-value" id="passwordDetailCreatedAt">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-item-label">최근 수정</span>
+                      <span class="detail-item-value" id="passwordDetailUpdatedAt">-</span>
+                    </div>
+                  </div>
+
+                  <div class="note-box" id="passwordDetailNoteBox">
+                    비밀번호 항목은 내부 업무용으로만 사용하고, 필요할 때 바로 복사할 수 있습니다.
+                  </div>
+
+                  <div class="detail-actions">
+                    <button class="primary-button" type="button" id="editPasswordButton" disabled>수정</button>
+                    <button class="ghost-button" type="button" id="deletePasswordButton" disabled>삭제</button>
+                  </div>
+                </div>
+              </div>
+
+              <form class="editor-form is-hidden" id="passwordEditorForm">
+                <div class="detail-top">
+                  <div class="detail-name">
+                    <div>
+                      <p class="eyebrow detail-eyebrow">편집 패널</p>
+                      <h2 id="passwordEditorTitle">새 항목 추가</h2>
+                    </div>
+                    <span class="status warning" id="passwordEditorStatus">편집 중</span>
+                  </div>
+                  <p class="panel-subtitle" id="passwordEditorDescription">업무 관련실 번호키 또는 비밀번호를 입력하십시오.</p>
+                </div>
+
+                <div class="form-grid">
+                  <label class="field-block field-span-2">
+                    <span>제목</span>
+                    <input type="text" id="passwordTitleInput" name="title" required />
+                  </label>
+                  <label class="field-block field-span-2">
+                    <span>비밀번호</span>
+                    <input type="text" id="passwordValueInput" name="password" />
+                  </label>
+                </div>
+
+                <div class="detail-actions">
+                  <button class="primary-button" type="submit" id="savePasswordButton">저장</button>
+                  <button class="secondary-button" type="button" id="cancelPasswordEditButton">취소</button>
+                </div>
+              </form>
+            </aside>
+          </section>
+        </section>
+
+        <button class="top-button" type="button" data-scroll-top-button>TOP</button>
+
         <section class="view-panel" data-view-panel="device-inventory">
           <section class="page-intro">
             <span class="eyebrow">기기 자산 관리</span>
@@ -540,22 +697,22 @@
           </section>
 
           <section class="stats-grid" aria-label="device inventory summary">
-            <article class="stat-card">
+            <article class="stat-card device-summary-card active" role="button" tabindex="0" data-device-summary-filter="all" aria-pressed="true">
               <span class="stat-label">전체 기기</span>
               <strong class="stat-value" id="deviceTotalValue">0</strong>
               <span class="stat-meta">저장된 전체 기기</span>
             </article>
-            <article class="stat-card success">
+            <article class="stat-card success device-summary-card" role="button" tabindex="0" data-device-summary-filter="normal" aria-pressed="false">
               <span class="stat-label">정상 사용</span>
               <strong class="stat-value" id="deviceNormalValue">0</strong>
               <span class="stat-meta">즉시 사용 가능</span>
             </article>
-            <article class="stat-card warning">
+            <article class="stat-card warning device-summary-card" role="button" tabindex="0" data-device-summary-filter="life_cycle_due" aria-pressed="false">
               <span class="stat-label">내용연한 도달</span>
               <strong class="stat-value" id="deviceRepairValue">0</strong>
               <span class="stat-meta">교체 검토가 필요한 기기</span>
             </article>
-            <article class="stat-card">
+            <article class="stat-card device-summary-card" role="button" tabindex="0" data-device-summary-filter="repair_or_inspection_needed" aria-pressed="false">
               <span class="stat-label">수리 및 점검 필요</span>
               <strong class="stat-value" id="deviceInspectionValue">0</strong>
               <span class="stat-meta">상태 확인이 필요한 기기</span>
@@ -573,6 +730,7 @@
                   <div class="account-feedback is-hidden" id="deviceFeedbackText" aria-live="polite"></div>
                   <span class="selection-count" id="deviceSelectionCount">선택 0건</span>
                   <button class="ghost-button danger-button" type="button" id="deleteSelectedDevicesButton" disabled>선택 삭제</button>
+                  <button class="secondary-button" type="button" id="clearDeviceColumnFiltersButton">필터 초기화</button>
                   <button class="secondary-button" type="button" id="refreshDevicesButton">목록 새로고침</button>
                 </div>
               </div>
@@ -584,24 +742,43 @@
                         <input type="checkbox" id="selectAllDevicesCheckbox" aria-label="현재 기기 목록 전체 선택" />
                       </th>
                       <th>연번</th>
-                      <th>설치장소</th>
-                      <th>형태</th>
-                      <th>제조회사</th>
-                      <th>모델명</th>
-                      <th>시리얼넘버</th>
-                      <th>CPU</th>
-                      <th>RAM</th>
-                      <th>구입시기</th>
-                      <th>사용연수</th>
-                      <th>상태</th>
-                      <th>비고</th>
-                      <th>사용자명</th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="location">설치장소 <span data-sort-indicator="location"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="device_type">형태 <span data-sort-indicator="device_type"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="manufacturer">제조회사 <span data-sort-indicator="manufacturer"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="model_name">모델명 <span data-sort-indicator="model_name"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="serial_number">시리얼넘버 <span data-sort-indicator="serial_number"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="cpu">CPU <span data-sort-indicator="cpu"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="ram">RAM <span data-sort-indicator="ram"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="acquired_at">구입시기 <span data-sort-indicator="acquired_at"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="usage_years">사용연수 <span data-sort-indicator="usage_years"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="status">상태 <span data-sort-indicator="status"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="note">비고 <span data-sort-indicator="note"></span></button></th>
+                      <th><button class="table-sort-button" type="button" data-device-sort="assigned_user">사용자명 <span data-sort-indicator="assigned_user"></span></button></th>
                       <th>제품이미지</th>
+                      <th>작업</th>
+                    </tr>
+                    <tr class="device-filter-row">
+                      <th></th>
+                      <th></th>
+                      <th><input type="text" data-device-column-filter="location" aria-label="설치장소 필터" /></th>
+                      <th><input type="text" data-device-column-filter="device_type" aria-label="형태 필터" /></th>
+                      <th><input type="text" data-device-column-filter="manufacturer" aria-label="제조회사 필터" /></th>
+                      <th><input type="text" data-device-column-filter="model_name" aria-label="모델명 필터" /></th>
+                      <th><input type="text" data-device-column-filter="serial_number" aria-label="시리얼넘버 필터" /></th>
+                      <th><input type="text" data-device-column-filter="cpu" aria-label="CPU 필터" /></th>
+                      <th><input type="text" data-device-column-filter="ram" aria-label="RAM 필터" /></th>
+                      <th><input type="text" data-device-column-filter="acquired_at" aria-label="구입시기 필터" /></th>
+                      <th><input type="text" data-device-column-filter="usage_years" aria-label="사용연수 필터" /></th>
+                      <th><input type="text" data-device-column-filter="status" aria-label="상태 필터" /></th>
+                      <th><input type="text" data-device-column-filter="note" aria-label="비고 필터" /></th>
+                      <th><input type="text" data-device-column-filter="assigned_user" aria-label="사용자명 필터" /></th>
+                      <th></th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody id="deviceInventoryTableBody">
                     <tr>
-                      <td colspan="15" class="empty-cell">저장된 기기 정보가 아직 없습니다.</td>
+                      <td colspan="16" class="empty-cell">저장된 기기 정보가 아직 없습니다.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -667,7 +844,14 @@
                     <label class="field-block"><span>구입시기</span><input type="text" id="deviceAcquiredAtInput" name="acquired_at" inputmode="numeric" pattern="\d{4}([.-]\s?\d{2}\.?|\s?\.\s?\d{2}\.)" placeholder="2026-06 또는 2026. 06." /></label>
                     <label class="field-block"><span>상태</span><select id="deviceStatusInput" name="status"></select></label>
                     <label class="field-block"><span>사용자명</span><input type="text" id="deviceUserInput" name="assigned_user" /></label>
-                    <label class="field-block field-span-2"><span>제품이미지 URL</span><input type="url" id="deviceImageInput" name="image_url" placeholder="https://example.com/device-photo.jpg 또는 /assets/device-photo.jpg" /></label>
+                    <div class="field-block field-span-2">
+                      <span>제품이미지</span>
+                      <div class="field-action-row">
+                        <input type="text" id="deviceImageInput" name="image_url" placeholder="/device-images/notebook.png 또는 외부 이미지 URL" />
+                        <button class="secondary-button" type="button" id="deviceImageUploadButton">이미지 업로드</button>
+                      </div>
+                      <input type="file" id="deviceImageUploadInput" accept="image/png,image/jpeg,image/webp" class="is-visually-hidden" />
+                    </div>
                     <label class="field-block field-span-2"><span>비고</span><textarea id="deviceNoteInput" name="note" rows="4"></textarea></label>
                   </div>
 
@@ -694,6 +878,8 @@
           </div>
         </section>
 
+        <button class="top-button" type="button" data-scroll-top-button>TOP</button>
+
         <section class="view-panel" data-view-panel="coming-soon">
           <section class="page-intro">
             <span class="eyebrow">다음 단계 준비</span>
@@ -718,6 +904,8 @@
               <p>기본 구조는 잡혀 있으므로, 이후에는 실제 운영 데이터 정리와 추가 규칙만 이어서 맞추면 됩니다.</p>
             </div>
           </section>
+
+          <button class="top-button" type="button" data-scroll-top-button>TOP</button>
         </section>
       </div>
     </main>
