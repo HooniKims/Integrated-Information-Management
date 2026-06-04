@@ -172,25 +172,25 @@
           </section>
 
           <section class="stats-grid" aria-label="scan summary">
-            <article class="stat-card">
+            <article class="stat-card scan-summary-card active" role="button" tabindex="0" data-scan-summary-filter="all" aria-pressed="true">
               <span class="stat-label">스캔 대상</span>
               <strong class="stat-value" id="totalTargetsValue">0</strong>
               <span class="stat-meta">입력한 범위 전체</span>
             </article>
-            <article class="stat-card success">
+            <article class="stat-card success scan-summary-card" role="button" tabindex="0" data-scan-summary-filter="reachable" aria-pressed="false">
               <span class="stat-label">응답 장치</span>
               <strong class="stat-value" id="aliveValue">0</strong>
               <span class="stat-meta">ping 응답 기준</span>
             </article>
-            <article class="stat-card warning">
+            <article class="stat-card warning scan-summary-card" role="button" tabindex="0" data-scan-summary-filter="unresolved" aria-pressed="false">
               <span class="stat-label">이름 미해결</span>
               <strong class="stat-value" id="unresolvedValue">0</strong>
               <span class="stat-meta">장치명 추가 확인 필요</span>
             </article>
-            <article class="stat-card">
+            <article class="stat-card scan-summary-card" role="button" tabindex="0" data-scan-summary-filter="has-mac" aria-pressed="false">
               <span class="stat-label">MAC 확인</span>
               <strong class="stat-value" id="macValue">0</strong>
-              <span class="stat-meta">ARP 기반 확인</span>
+              <span class="stat-meta">기기 고유번호 확인</span>
             </article>
           </section>
 

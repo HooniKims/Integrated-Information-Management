@@ -977,19 +977,23 @@ button:disabled {
   gap: 0.5rem;
 }
 
-.device-summary-card {
+.device-summary-card,
+.scan-summary-card {
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .device-summary-card:hover,
-.device-summary-card:focus-visible {
+.device-summary-card:focus-visible,
+.scan-summary-card:hover,
+.scan-summary-card:focus-visible {
   border-color: rgba(31, 78, 121, 0.45);
   box-shadow: 0 0 0 3px rgba(31, 78, 121, 0.12), var(--shadow-soft);
   outline: none;
 }
 
-.device-summary-card.active {
+.device-summary-card.active,
+.scan-summary-card.active {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(31, 78, 121, 0.14), var(--shadow-soft);
 }

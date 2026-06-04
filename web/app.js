@@ -156,6 +156,7 @@ const elements = {
   resultSearchInput: document.getElementById("resultSearchInput"),
   resultMetaText: document.getElementById("resultMetaText"),
   filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
+  scanSummaryCards: Array.from(document.querySelectorAll("[data-scan-summary-filter]")),
 
   accountStatusPill: document.getElementById("accountStatusPill"),
   refreshAccountsButton: document.getElementById("refreshAccountsButton"),
@@ -826,6 +827,7 @@ function initializeAppShell() {
   state.appInitialized = true;
   setIdleState();
   applyDefaultRange(false);
+  setScanSummaryActive(state.currentFilter);
   populateDeviceSelectOptions();
   resetDetailPanel();
   resetAccountDetail();
@@ -1454,10 +1456,16 @@ function clearResults() {
   state.rawResults = [];
   state.currentResults = [];
   state.resultSearchQuery = "";
+  state.currentFilter = "all";
   setIdleState();
   elements.cancelScanButton.disabled = true;
   elements.scanStartButton.disabled = false;
   elements.resultSearchInput.value = "";
+  const allFilterButton = elements.filterButtons.find((button) => button.dataset.filter === "all");
+  if (allFilterButton) {
+    elements.filterButtons.forEach((target) => target.classList.toggle("active", target === allFilterButton));
+  }
+  setScanSummaryActive("all");
   applyDefaultRange(false);
   resetDetailPanel();
   elements.resultsTableBody.innerHTML = `
@@ -1500,7 +1508,24 @@ async function copySelectedResult() {
 function activateFilter(button) {
   elements.filterButtons.forEach((target) => target.classList.toggle("active", target === button));
   state.currentFilter = button.dataset.filter;
+  setScanSummaryActive(state.currentFilter);
   renderResults(state.rawResults);
+}
+
+function activateScanSummaryFilter(card) {
+  const filter = card.dataset.scanSummaryFilter || "all";
+  const matchingButton = elements.filterButtons.find((button) => button.dataset.filter === filter);
+  if (matchingButton) {
+    activateFilter(matchingButton);
+  }
+}
+
+function setScanSummaryActive(filter) {
+  elements.scanSummaryCards.forEach((card) => {
+    const isActive = card.dataset.scanSummaryFilter === filter;
+    card.classList.toggle("active", isActive);
+    card.setAttribute("aria-pressed", String(isActive));
+  });
 }
 
 function applyDefaultRange(updateMessage = true) {
@@ -3499,6 +3524,15 @@ elements.copySelectedButton.addEventListener("click", copySelectedResult);
 elements.resultSearchInput.addEventListener("input", handleResultSearch);
 elements.filterButtons.forEach((button) => {
   button.addEventListener("click", () => activateFilter(button));
+});
+elements.scanSummaryCards.forEach((card) => {
+  card.addEventListener("click", () => activateScanSummaryFilter(card));
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      activateScanSummaryFilter(card);
+    }
+  });
 });
 
 elements.refreshAccountsButton.addEventListener("click", loadSiteAccounts);

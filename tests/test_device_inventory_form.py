@@ -142,6 +142,20 @@ class DeviceInventoryFormTestCase(unittest.TestCase):
         self.assertIn("setDeviceReportProgress(100, true)", script)
         self.assertIn("elements.deviceReportButton.disabled = true", script)
 
+    def test_ip_scan_summary_cards_filter_results(self) -> None:
+        html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('data-scan-summary-filter="all"', html)
+        self.assertIn('data-scan-summary-filter="reachable"', html)
+        self.assertIn('data-scan-summary-filter="unresolved"', html)
+        self.assertIn('data-scan-summary-filter="has-mac"', html)
+        self.assertIn("기기 고유번호 확인", html)
+        self.assertNotIn("ARP 기반 확인", html)
+        self.assertIn("scanSummaryCards", script)
+        self.assertIn("activateScanSummaryFilter", script)
+        self.assertIn("setScanSummaryActive", script)
+
 
 if __name__ == "__main__":
     unittest.main()
