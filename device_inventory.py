@@ -11,8 +11,6 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from openpyxl import Workbook
-from openpyxl.chart import BarChart, Reference
-from openpyxl.chart.label import DataLabelList
 from openpyxl.drawing.image import Image as WorkbookImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -456,10 +454,14 @@ class DeviceInventoryRepository:
         sheet["F8"] = status_summary["교체 검토"]
         sheet["E9"] = "설치장소 (장비가 배치된 공간)"
         sheet["F9"] = "수량 (등록 장비 수)"
+        sheet.merge_cells("H5:L5")
+        sheet.merge_cells("H6:L6")
+        sheet.merge_cells("H7:L7")
+        sheet.merge_cells("H8:L8")
         sheet["H5"] = "차트 읽는 법"
         sheet["H6"] = "설치장소: 장비가 실제로 배치된 공간입니다."
         sheet["H7"] = "수량: 해당 장소에 등록된 장비 대수입니다."
-        sheet["H8"] = "막대 끝 숫자는 장소별 장비 수량을 뜻합니다."
+        sheet["H8"] = "막대 그래프는 상위 8개 장소를 기준으로 표시합니다."
 
         for cell_ref in ["A5", "C5", "E5", "A8", "C8", "E8", "E9", "F9", "H5"]:
             sheet[cell_ref].font = Font(bold=True, color=TEXT_PRIMARY)
@@ -502,11 +504,11 @@ class DeviceInventoryRepository:
             "D": 12,
             "E": 18,
             "F": 14,
-            "H": 4,
-            "I": 12,
-            "J": 12,
-            "K": 12,
-            "L": 12,
+            "H": 18,
+            "I": 10,
+            "J": 30,
+            "K": 10,
+            "L": 10,
         }.items():
             sheet.column_dimensions[column_letter].width = width
 
@@ -514,26 +516,46 @@ class DeviceInventoryRepository:
         sheet.row_dimensions[2].height = 22
 
         if location_rows:
-            chart = BarChart()
-            chart.type = "bar"
-            chart.style = 2
-            chart.title = "설치장소별 장비 수"
-            chart.y_axis.title = "설치장소"
-            chart.x_axis.title = "수량"
-            chart.legend = None
-            data = Reference(sheet, min_col=6, min_row=9, max_row=9 + len(location_rows))
-            labels = Reference(sheet, min_col=5, min_row=10, max_row=9 + len(location_rows))
-            chart.add_data(data, titles_from_data=True)
-            chart.set_categories(labels)
-            chart.varyColors = False
-            chart.dLbls = DataLabelList()
-            chart.dLbls.showVal = True
-            if chart.series:
-                chart.series[0].graphicalProperties.solidFill = ACCENT_PRIMARY
-                chart.series[0].graphicalProperties.line.solidFill = ACCENT_PRIMARY
-            chart.height = 7
-            chart.width = 11
-            sheet.add_chart(chart, "H9")
+            self._write_dashboard_bar_graph(sheet, location_rows[:8], start_row=9)
+
+    def _write_dashboard_bar_graph(self, sheet, location_rows: list[tuple[str, int]], start_row: int) -> None:
+        header_fill = PatternFill(fill_type="solid", fgColor=BG_SUBTLE)
+        bar_fill = PatternFill(fill_type="solid", fgColor=ACCENT_SOFT)
+        surface_fill = PatternFill(fill_type="solid", fgColor=BG_SURFACE)
+        border = self._build_thin_border()
+        strong_border = self._build_strong_border()
+        max_count = max((count for _, count in location_rows), default=1)
+
+        sheet.merge_cells(start_row=start_row, start_column=8, end_row=start_row, end_column=12)
+        title_cell = sheet.cell(row=start_row, column=8, value="설치장소별 막대 그래프")
+        title_cell.font = Font(bold=True, color=TEXT_PRIMARY)
+        title_cell.fill = header_fill
+        title_cell.border = strong_border
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        headers = ["장소", "수량", "그래프"]
+        for offset, value in enumerate(headers):
+            cell = sheet.cell(row=start_row + 1, column=8 + offset, value=value)
+            cell.font = Font(bold=True, color=TEXT_PRIMARY)
+            cell.fill = header_fill
+            cell.border = strong_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for row_offset, (location, count) in enumerate(location_rows, start=2):
+            row_index = start_row + row_offset
+            bar_length = max(1, round((count / max_count) * 24))
+            values = [location, count, "█" * bar_length]
+            for col_offset, value in enumerate(values):
+                cell = sheet.cell(row=row_index, column=8 + col_offset, value=value)
+                cell.border = border
+                cell.fill = surface_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.font = Font(color=TEXT_PRIMARY)
+
+            bar_cell = sheet.cell(row=row_index, column=10)
+            bar_cell.fill = bar_fill
+            bar_cell.font = Font(color=ACCENT_PRIMARY, bold=True)
+            bar_cell.alignment = Alignment(horizontal="left", vertical="center")
 
     def _write_full_inventory_sheet(self, sheet, devices: list[dict]) -> None:
         self._write_inventory_table(sheet, devices, start_row=1)
