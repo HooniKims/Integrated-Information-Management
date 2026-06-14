@@ -1471,9 +1471,29 @@ tbody tr.selected {
 
 .device-table th:nth-child(2),
 .device-table td:nth-child(2) {
-  width: 3.5rem;
+  width: 3rem;
   text-align: center;
   white-space: nowrap;
+}
+
+.device-table th:nth-child(3),
+.device-table td:nth-child(3) {
+  width: 5.7rem;
+}
+
+.device-table th:nth-child(4),
+.device-table td:nth-child(4) {
+  width: 4.2rem;
+}
+
+.device-table th:nth-child(5),
+.device-table td:nth-child(5) {
+  width: 5.4rem;
+}
+
+.device-table th:nth-child(-n + 5),
+.device-table td:nth-child(-n + 5) {
+  padding-inline: 0.48rem;
 }
 
 .device-table th:nth-child(7),
@@ -1533,10 +1553,12 @@ tbody tr.selected {
 
 .device-table th:nth-child(14),
 .device-table td:nth-child(14) {
-  width: 4.8rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 8.2rem;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .device-table th:nth-child(15),
@@ -1785,6 +1807,12 @@ tbody tr.selected {
 
 .inventory-workspace .panel-body .device-table td {
   text-align: center;
+}
+
+.inventory-workspace .panel-body .device-table td:nth-child(14) {
+  text-align: left;
+  font-weight: 750;
+  color: var(--text-primary);
 }
 
 .inventory-wide-panel {
